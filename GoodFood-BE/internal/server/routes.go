@@ -37,6 +37,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	productGroup.Get("/getFeaturings",handlers.GetFour)
 	productGroup.Get("/getTypes",handlers.GetTypes)
 	productGroup.Get("/",handlers.GetProductsByPage)
+	productGroup.Post("/classify-image",handlers.ClassifyImage)
 
 }
 
