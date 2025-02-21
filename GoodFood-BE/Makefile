@@ -5,9 +5,7 @@ all: build test
 
 build:
 	@echo "Building..."
-	
-	
-	@go build -o main.exe cmd/api/main.go
+	@go build -o main cmd/api/main.go
 
 # Run the application
 run:
@@ -36,14 +34,10 @@ clean:
 
 # Live Reload
 watch:
-	@powershell -ExecutionPolicy Bypass -Command "if (Get-Command air -ErrorAction SilentlyContinue) { \
-		air; \
-		Write-Output 'Watching...'; \
-	} else { \
-		Write-Output 'Installing air...'; \
-		go install github.com/air-verse/air@latest; \
-		air; \
-		Write-Output 'Watching...'; \
-	}"
+	@if ! command -v air &> /dev/null; then \
+		echo "Installing air..."; \
+		go install github.com/cosmtrek/air@latest; \
+	fi; \
+	air
 
 .PHONY: all build run test clean watch docker-run docker-down itest

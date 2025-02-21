@@ -1,6 +1,7 @@
 package server
 
 import (
+	"GoodFood-BE/internal/auth"
 	"GoodFood-BE/internal/database"
 	"GoodFood-BE/internal/server/handlers"
 	"context"
@@ -16,10 +17,10 @@ import (
 func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
+		AllowOrigins:     "http://127.0.0.1:5173",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
-		AllowCredentials: false, // credentials require explicit origins
+		AllowCredentials: true, // credentials require explicit origins
 		MaxAge:           300,
 	}))
 
@@ -29,16 +30,26 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 
 	s.App.Get("/websocket", websocket.New(s.websocketHandler))
 
-	//Nhóm route liên quan đến user
+	//Routes related to accounts
 	userGroup := s.App.Group("/api/user")
 	userGroup.Get("/login",handlers.HandleLogin)
-	//Nhóm route liên quan đến product
+	userGroup.Get("/refresh-token",handlers.RefreshToken)
+	//Routes related to products
 	productGroup := s.App.Group("/api/products")
 	productGroup.Get("/getFeaturings",handlers.GetFour)
 	productGroup.Get("/getTypes",handlers.GetTypes)
 	productGroup.Get("/",handlers.GetProductsByPage)
 	productGroup.Post("/classify-image",handlers.ClassifyImage)
-
+	productGroup.Get("/detail",handlers.GetDetail)
+	productGroup.Get("/similar",handlers.GetSimilar)
+	//Routes related to cart
+	cartGroup := s.App.Group("/api/cart",auth.AuthMiddleware)
+	cartGroup.Get("/fetch",handlers.FetchCart)
+	cartGroup.Get("",handlers.GetCartDetail)
+	cartGroup.Post("/modify",handlers.Cart_ModifyQuantity)
+	cartGroup.Delete("/delete",handlers.DeleteCartItem)
+	cartGroup.Post("/add",handlers.AddToCart)
+	cartGroup.Delete("/deleteAll",handlers.DeleteAllItems)
 }
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {

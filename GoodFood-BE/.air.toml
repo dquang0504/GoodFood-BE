@@ -4,8 +4,8 @@ tmp_dir = "tmp"
 
 [build]
   args_bin = []
-  bin = ".\\main.exe"
-  cmd = "C:\\MinGW\\bin\\mingw32-make.exe build"
+  bin = "./main"
+  cmd = "make build"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata", "node_modules"]
   exclude_file = []
@@ -44,3 +44,6 @@ tmp_dir = "tmp"
 [screen]
   clear_on_rebuild = false
   keep_scroll = true
+[server]
+# Cố định cổng 8080
+bind = "0.0.0.0:8080"

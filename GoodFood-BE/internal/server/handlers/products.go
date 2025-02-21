@@ -3,20 +3,25 @@ package handlers
 import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
-	"encoding/base64"
+	"bytes"
+	"fmt"
+	"image"
+	"image/png"
+	"image/jpeg"
+	"io"
 	"math"
 	"sort"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	tflite "github.com/mattn/go-tflite"
+	"github.com/nfnt/resize"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	// "golang.org/x/text/number"
 )
 
 func GetFour(c *fiber.Ctx) error {
-	println("HELLO TÊACHER")
     // Tạo context từ Fiber
 	ctx := c.Context()
 
@@ -136,7 +141,6 @@ var classNames []string = []string{
 }
 
 func ClassifyImage(c *fiber.Ctx) error{
-	println("Hello teacher")
 	//Load model
 	modelPath := "internal/models/model_unquant.tflite";
 	model := tflite.NewModelFromFile(modelPath);
@@ -152,25 +156,31 @@ func ClassifyImage(c *fiber.Ctx) error{
 	defer interpreter.Delete()
 
 	//Cấp phát bộ nhớ cho tensors
-	if err := interpreter.AllocateTensors(); err == tflite.Error{
-		return service.SendError(c,500,"Failed to allocate tensors")
-	}
+	interpreter.AllocateTensors()
 
 	//Lấy dữ liệu ảnh từ request
-	imageBase64 := c.Query("image","");
-	if imageBase64 == ""{
-		return service.SendError(c,400,"No image found!");
+	file, err := c.FormFile("image")
+	if err != nil{
+		return service.SendError(c,400,"Invalid request format");
 	}
 
-	//Giải mã base64 thành dữ liệu ảnh
-	imageBytes, err := base64.StdEncoding.DecodeString(imageBase64);
-	if err != nil{
-		return service.SendError(c,500,"Failed to decode image base64")
+	// Mở file ảnh
+	fileContent, err := file.Open()
+	if err != nil {
+		return service.SendError(c, 500, "Failed to open uploaded image")
+	}
+	defer fileContent.Close()
+
+	// Đọc dữ liệu ảnh vào buffer
+	imageBytes, err := io.ReadAll(fileContent)
+	if err != nil {
+		return service.SendError(c, 500, "Failed to read image data")
 	}
 
 	//Chuyển ảnh thành tensor
 	tensorData,err := processImageForModel(imageBytes);
 	if err != nil{
+		fmt.Println("Error in processImageForModel:", err)
 		return service.SendError(c,500,"Failed to process image for model");
 	}
 
@@ -206,17 +216,58 @@ func ClassifyImage(c *fiber.Ctx) error{
 		return resultWithConfidence[i]["confidence"].(float32) > resultWithConfidence[j]["confidence"].(float32)
 	})
 
+	// Giữ lại 3 kết quả có độ tin cậy cao nhất
+	top3Results := resultWithConfidence[:3]
+
 	//Trả về kết quả
 	return c.JSON(fiber.Map{
 		"status": "Success",
 		"message": "Image classified successfully",
-		"data": resultWithConfidence,
+		"data": top3Results,
 	})
 
 }
 
-func processImageForModel(imageBytes []byte) ([]float32, error){
-	return make([]float32, 224*224*3),nil
+func processImageForModel(imageBytes []byte) ([]float32, error) {
+	// Kiểm tra kích thước dữ liệu ảnh
+	fmt.Println("Image byte length:", len(imageBytes))
+
+	// Thử decode ảnh bằng các thư viện cụ thể
+	img, format, err := image.Decode(bytes.NewReader(imageBytes))
+	fmt.Println(format)
+	if err != nil {
+		fmt.Println("Failed to decode image using image.Decode. Trying alternative decoders...")
+
+		// Thử giải mã ảnh JPEG
+		img, err = jpeg.Decode(bytes.NewReader(imageBytes))
+		if err != nil {
+			fmt.Println("JPEG decode failed, trying PNG...")
+			// Thử giải mã ảnh PNG
+			img, err = png.Decode(bytes.NewReader(imageBytes))
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode image using all formats: %v", err)
+		}
+	}
+
+	// Resize ảnh về 224x224
+	resizedImg := resize.Resize(224, 224, img, resize.Lanczos3)
+
+	// Chuyển ảnh thành dữ liệu tensor
+	tensorData := make([]float32, 224*224*3)
+	index := 0
+	for y := 0; y < 224; y++ {
+		for x := 0; x < 224; x++ {
+			r, g, b, _ := resizedImg.At(x, y).RGBA()
+			tensorData[index] = float32(r>>8) / 255.0 // Chuẩn hóa pixel về [0,1]
+			tensorData[index+1] = float32(g>>8) / 255.0
+			tensorData[index+2] = float32(b>>8) / 255.0
+			index += 3
+		}
+	}
+
+	return tensorData, nil
 }
 
 func softmax(logits []float32) []float32{
@@ -230,4 +281,50 @@ func softmax(logits []float32) []float32{
 		exp[i] /= sum
 	}
 	return exp
+}
+
+func GetDetail(c *fiber.Ctx) error{
+	id := c.Query("id","");
+	if id == ""{
+		return service.SendError(c,500,"ID not found");
+	}
+	
+	detail, err := models.Products(qm.Where("\"productID\" = ?",id)).One(c.Context(),boil.GetContextDB());
+	if err != nil {
+		return service.SendError(c, 500, "product not found");
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": detail,
+		"message": "Successfully fetched detailed product!",
+	}
+
+	return c.JSON(resp);
+}
+
+func GetSimilar(c *fiber.Ctx) error{
+	productID := c.Query("id","");
+	if productID == ""{
+		return service.SendError(c,404,"Did not receive ID!");
+	}
+
+	typeID := c.Query("typeID","");
+	if typeID == ""{
+		return service.SendError(c,404,"Did not receive typeID!");
+	}
+
+	//Fetching typeName from typeID
+	similars,err := models.Products(qm.Where("\"productID\" != ? AND \"productTypeID\" = ?",productID,typeID)).All(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"ID not found!");
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": similars,
+		"message": "Successfully fetched similar products",
+	}
+
+	return c.JSON(resp);
 }
