@@ -32,8 +32,9 @@ type Address struct {
 	ProvinceID      int    `boil:"provinceID" json:"provinceID" toml:"provinceID" yaml:"provinceID"`
 	DistrictID      int    `boil:"districtID" json:"districtID" toml:"districtID" yaml:"districtID"`
 	WardID          int    `boil:"wardID" json:"wardID" toml:"wardID" yaml:"wardID"`
-	DeleteStatus    int    `boil:"deleteStatus" json:"deleteStatus" toml:"deleteStatus" yaml:"deleteStatus"`
+	DeleteStatus    bool   `boil:"deleteStatus" json:"deleteStatus" toml:"deleteStatus" yaml:"deleteStatus"`
 	AccountID       int    `boil:"accountID" json:"accountID" toml:"accountID" yaml:"accountID"`
+	WardCode        string `boil:"wardCode" json:"wardCode" toml:"wardCode" yaml:"wardCode"`
 
 	R *addressR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L addressL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -51,6 +52,7 @@ var AddressColumns = struct {
 	WardID          string
 	DeleteStatus    string
 	AccountID       string
+	WardCode        string
 }{
 	AddressID:       "addressID",
 	PhoneNumber:     "phoneNumber",
@@ -63,6 +65,7 @@ var AddressColumns = struct {
 	WardID:          "wardID",
 	DeleteStatus:    "deleteStatus",
 	AccountID:       "accountID",
+	WardCode:        "wardCode",
 }
 
 var AddressTableColumns = struct {
@@ -77,6 +80,7 @@ var AddressTableColumns = struct {
 	WardID          string
 	DeleteStatus    string
 	AccountID       string
+	WardCode        string
 }{
 	AddressID:       "address.addressID",
 	PhoneNumber:     "address.phoneNumber",
@@ -89,6 +93,7 @@ var AddressTableColumns = struct {
 	WardID:          "address.wardID",
 	DeleteStatus:    "address.deleteStatus",
 	AccountID:       "address.accountID",
+	WardCode:        "address.wardCode",
 }
 
 // Generated where
@@ -103,8 +108,9 @@ var AddressWhere = struct {
 	ProvinceID      whereHelperint
 	DistrictID      whereHelperint
 	WardID          whereHelperint
-	DeleteStatus    whereHelperint
+	DeleteStatus    whereHelperbool
 	AccountID       whereHelperint
+	WardCode        whereHelperstring
 }{
 	AddressID:       whereHelperint{field: "\"address\".\"addressID\""},
 	PhoneNumber:     whereHelperstring{field: "\"address\".\"phoneNumber\""},
@@ -115,8 +121,9 @@ var AddressWhere = struct {
 	ProvinceID:      whereHelperint{field: "\"address\".\"provinceID\""},
 	DistrictID:      whereHelperint{field: "\"address\".\"districtID\""},
 	WardID:          whereHelperint{field: "\"address\".\"wardID\""},
-	DeleteStatus:    whereHelperint{field: "\"address\".\"deleteStatus\""},
+	DeleteStatus:    whereHelperbool{field: "\"address\".\"deleteStatus\""},
 	AccountID:       whereHelperint{field: "\"address\".\"accountID\""},
+	WardCode:        whereHelperstring{field: "\"address\".\"wardCode\""},
 }
 
 // AddressRels is where relationship names are stored.
@@ -147,9 +154,9 @@ func (r *addressR) GetAccountIDAccount() *Account {
 type addressL struct{}
 
 var (
-	addressAllColumns            = []string{"addressID", "phoneNumber", "fullName", "address", "specificAddress", "status", "provinceID", "districtID", "wardID", "deleteStatus", "accountID"}
-	addressColumnsWithoutDefault = []string{"phoneNumber", "fullName", "address", "specificAddress", "status", "provinceID", "districtID", "wardID", "deleteStatus", "accountID"}
-	addressColumnsWithDefault    = []string{"addressID"}
+	addressAllColumns            = []string{"addressID", "phoneNumber", "fullName", "address", "specificAddress", "status", "provinceID", "districtID", "wardID", "deleteStatus", "accountID", "wardCode"}
+	addressColumnsWithoutDefault = []string{"phoneNumber", "fullName", "address", "specificAddress", "provinceID", "districtID", "wardID", "deleteStatus", "accountID", "wardCode"}
+	addressColumnsWithDefault    = []string{"addressID", "status"}
 	addressPrimaryKeyColumns     = []string{"addressID"}
 	addressGeneratedColumns      = []string{"addressID"}
 )

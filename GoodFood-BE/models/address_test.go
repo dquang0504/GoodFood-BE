@@ -687,7 +687,7 @@ func testAddressesSelect(t *testing.T) {
 }
 
 var (
-	addressDBTypes = map[string]string{`AddressID`: `integer`, `PhoneNumber`: `character varying`, `FullName`: `character varying`, `Address`: `character varying`, `SpecificAddress`: `character`, `Status`: `boolean`, `ProvinceID`: `integer`, `DistrictID`: `integer`, `WardID`: `integer`, `DeleteStatus`: `integer`, `AccountID`: `integer`}
+	addressDBTypes = map[string]string{`AddressID`: `integer`, `PhoneNumber`: `character varying`, `FullName`: `character varying`, `Address`: `character varying`, `SpecificAddress`: `character`, `Status`: `boolean`, `ProvinceID`: `integer`, `DistrictID`: `integer`, `WardID`: `integer`, `DeleteStatus`: `boolean`, `AccountID`: `integer`, `WardCode`: `character varying`}
 	_              = bytes.MinRead
 )
 

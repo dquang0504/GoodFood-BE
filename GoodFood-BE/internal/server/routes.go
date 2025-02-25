@@ -50,6 +50,13 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	cartGroup.Delete("/delete",handlers.DeleteCartItem)
 	cartGroup.Post("/add",handlers.AddToCart)
 	cartGroup.Delete("/deleteAll",handlers.DeleteAllItems)
+	//Routes related to address
+	addressGroup := s.App.Group("api/address",auth.AuthMiddleware)
+	addressGroup.Get("/fetch",handlers.FetchAddress)
+	addressGroup.Post("/insert",handlers.AddressInsert)
+	addressGroup.Get("/detail",handlers.AddressDetail)
+	addressGroup.Put("/update",handlers.AddressUpdate)
+	addressGroup.Delete("/delete",handlers.AddressDelete)
 }
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {

@@ -1578,7 +1578,6 @@ func testAccountsSliceUpdateAll(t *testing.T) {
 			accountAllColumns,
 			accountPrimaryKeyColumns,
 		)
-		fields = strmangle.SetComplement(fields, accountGeneratedColumns)
 	}
 
 	value := reflect.Indirect(reflect.ValueOf(o))

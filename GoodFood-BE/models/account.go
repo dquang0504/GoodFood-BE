@@ -314,7 +314,7 @@ var (
 	accountColumnsWithoutDefault = []string{"username", "password", "email", "fullName", "gender", "status", "role"}
 	accountColumnsWithDefault    = []string{"accountID", "phoneNumber", "avatar"}
 	accountPrimaryKeyColumns     = []string{"accountID"}
-	accountGeneratedColumns      = []string{"accountID"}
+	accountGeneratedColumns      = []string{}
 )
 
 type (
@@ -1770,7 +1770,6 @@ func (o *Account) Insert(ctx context.Context, exec boil.ContextExecutor, columns
 			accountColumnsWithoutDefault,
 			nzDefaults,
 		)
-		wl = strmangle.SetComplement(wl, accountGeneratedColumns)
 
 		cache.valueMapping, err = queries.BindMapping(accountType, accountMapping, wl)
 		if err != nil {
@@ -1841,7 +1840,6 @@ func (o *Account) Update(ctx context.Context, exec boil.ContextExecutor, columns
 			accountAllColumns,
 			accountPrimaryKeyColumns,
 		)
-		wl = strmangle.SetComplement(wl, accountGeneratedColumns)
 
 		if !columns.IsWhitelist() {
 			wl = strmangle.SetComplement(wl, []string{"created_at"})
@@ -2011,9 +2009,6 @@ func (o *Account) Upsert(ctx context.Context, exec boil.ContextExecutor, updateO
 			accountAllColumns,
 			accountPrimaryKeyColumns,
 		)
-
-		insert = strmangle.SetComplement(insert, accountGeneratedColumns)
-		update = strmangle.SetComplement(update, accountGeneratedColumns)
 
 		if updateOnConflict && len(update) == 0 {
 			return errors.New("models: unable to upsert account, could not build update column list")

@@ -55,7 +55,6 @@ func GetTypes(c *fiber.Ctx) error{
 }
 
 func GetProductsByPage(c *fiber.Ctx) error{
-	boil.DebugMode = true
 	var totalProduct int64
 
 	//Lấy về số trang
@@ -133,7 +132,7 @@ func GetProductsByPage(c *fiber.Ctx) error{
 }
 
 var classNames []string = []string{
-	"Bánh flan", "Bánh mì ngọt", "Bánh mochi", "Bánh tiramisu",
+	"Bánh flan", "Bánh mì ngọt", "Bánh mochi", "Tiramisu",
 	"Chè thái", "Cơm bò lúc lắc", "Cơm cá chiên", "Cơm chiên dương châu", "Cơm gà", "Cơm tấm",
 	"Cơm thịt kho", "Cơm xá xíu", "Kem dừa", "Kem socola", "Nước ngọt 7up", "Nước ngọt coca-cola",
 	"Nước ngọt pepsi", "Nước ngọt sprite", "Nước tăng lực red bull", "Nước tăng lực sting", "Thịt bò hầm tiêu xanh",
