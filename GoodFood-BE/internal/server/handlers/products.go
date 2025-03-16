@@ -1,17 +1,20 @@
 package handlers
 
 import (
+	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"image"
-	"image/png"
 	"image/jpeg"
+	"image/png"
 	"io"
 	"math"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	tflite "github.com/mattn/go-tflite"
@@ -28,7 +31,7 @@ func GetFour(c *fiber.Ctx) error {
 	// Truy vấn danh sách sản phẩm
 	products, err := models.Products(qm.Limit(4)).All(ctx, boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c,500,"Faield to fetch products")
+		return service.SendError(c,500,"Failed to fetch products")
 	}
 
 	resp := fiber.Map{
@@ -106,6 +109,16 @@ func GetProductsByPage(c *fiber.Ctx) error{
 	if err != nil {
 		return service.SendError(c, 500, "Total product not found")
 	}
+	totalPage := int(math.Ceil(float64(totalProduct) / float64(6)))
+
+	//Creating redis key after page,type,search
+	redisKey := fmt.Sprintf("products:page%d:type=%s:search=%s",page,typeName,search)
+	//Checking if redis key exists
+	cachedProducts,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
+	fmt.Println("Cached data:", cachedProducts)
+	if err == nil{
+		return c.JSON(json.RawMessage(cachedProducts))
+	}
 
 	//Thêm vào offset và limit để phân trang
 	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset));
@@ -117,8 +130,6 @@ func GetProductsByPage(c *fiber.Ctx) error{
 		return service.SendError(c, 500, "Failed to fetch products by page")
 	}
 
-	totalPage := int(math.Ceil(float64(totalProduct) / float64(6)))
-
 	resp := fiber.Map{
 		"status": "Success",
 		"data": products,
@@ -126,7 +137,13 @@ func GetProductsByPage(c *fiber.Ctx) error{
 		"message": "Successfully fetched products by page",
 	}
 
-	println(totalPage)
+	//saving redis key to redis database for 10 mins
+	jsonData, _ := json.Marshal(resp)
+	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData, 10*time.Minute)
+	if rdsErr != nil{
+		fmt.Println("Failed to cache product data:", rdsErr)
+	}
+
 
 	return c.JSON(resp);
 }
@@ -287,6 +304,14 @@ func GetDetail(c *fiber.Ctx) error{
 	if id == ""{
 		return service.SendError(c,500,"ID not found");
 	}
+
+	//creating redis key
+	redisKey := fmt.Sprintf("product:detail:%s",id)
+	//checking if redis key exists
+	cachedDetail,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
+	if err == nil{
+		return c.JSON(json.RawMessage(cachedDetail))
+	}
 	
 	detail, err := models.Products(qm.Where("\"productID\" = ?",id)).One(c.Context(),boil.GetContextDB());
 	if err != nil {
@@ -298,6 +323,10 @@ func GetDetail(c *fiber.Ctx) error{
 		"data": detail,
 		"message": "Successfully fetched detailed product!",
 	}
+
+	//Saving redis cache for 30 mins
+	jsonData, _ := json.Marshal(resp)
+	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData,30*time.Minute)
 
 	return c.JSON(resp);
 }

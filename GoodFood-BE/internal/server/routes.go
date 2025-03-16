@@ -57,6 +57,20 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	addressGroup.Get("/detail",handlers.AddressDetail)
 	addressGroup.Put("/update",handlers.AddressUpdate)
 	addressGroup.Delete("/delete",handlers.AddressDelete)
+	addressGroup.Get("/fill",handlers.AddressFill)
+	addressGroup.Put("/quickChange",handlers.AddressQuickChange)
+	//Routes related to invoice
+	invoiceGroup := s.App.Group("api/invoice",auth.AuthMiddleware)
+	invoiceGroup.Post("/pay",handlers.InvoicePay)
+	//Routes related to Admin Dashboard
+	dashboardGroup := s.App.Group("api/admin",auth.AuthMiddleware)
+	dashboardGroup.Get("/dashboard",handlers.GetDashboard)
+	dashboardGroup.Get("/linechart",handlers.GetLineChart)
+	dashboardGroup.Get("/piechart",handlers.GetPieChart)
+	dashboardGroup.Get("/barchart",handlers.GetBarChart)
+	//Routes related to Admin Invoice
+	adminInvoiceGroup := s.App.Group("api/admin",auth.AuthMiddleware)
+	adminInvoiceGroup.Get("/order",handlers.GetAdminInvoice)
 }
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {

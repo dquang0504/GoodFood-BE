@@ -1,10 +1,14 @@
 package handlers
 
 import (
+	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -17,9 +21,17 @@ type CartDetailResponse struct{
 }
 
 func GetCartDetail(c *fiber.Ctx) error{
-	accountID := c.Query("accountID","");
-	if accountID == ""{
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
 		return service.SendError(c,400,"Did not receive accountID");
+	}
+
+	//creating redis key after accountID
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID);
+	//fetching redis key
+	cachedCart,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
+	if err == nil{
+		return c.JSON(json.RawMessage(cachedCart))
 	}
 
 	cartDetails, err := models.CartDetails(
@@ -40,11 +52,19 @@ func GetCartDetail(c *fiber.Ctx) error{
 		}
 	}
 
-	return c.JSON(fiber.Map{
+	resp := fiber.Map{
 		"status":  "Success",
 		"data":    response,
 		"message": "Successfully fetched cart detail of user",
-	})
+	}
+
+	savingKeyJson, _ := json.Marshal(resp)
+	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10*time.Minute).Err()
+	if rdsErr != nil{
+		fmt.Println("Failed to cache cart data: ",rdsErr)
+	}
+
+	return c.JSON(resp)
 }
 
 func Cart_ModifyQuantity(c *fiber.Ctx) error{
@@ -52,6 +72,10 @@ func Cart_ModifyQuantity(c *fiber.Ctx) error{
 	cartID := c.QueryInt("cartID",0);
 	if (cartID == 0){
 		return service.SendError(c,401,"Did not receive cartID");
+	}
+	accountID := c.QueryInt("accountID",0);
+	if (accountID == 0){
+		return service.SendError(c,401,"Did not receive accountID");
 	}
 
 	//Parsing request body into struct
@@ -69,6 +93,17 @@ func Cart_ModifyQuantity(c *fiber.Ctx) error{
 		return service.SendError(c, 500, "Failed to update cart quantity")
 	}
 
+	//deleting cart cache after modfication
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID);
+	cachedCart,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
+	if err == nil{
+		rdsErr := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err();
+		if rdsErr != nil {
+			fmt.Println("Failed to clear cache:", rdsErr)
+			fmt.Println("Cached cart:", cachedCart)
+		}
+	}
+
 	resp := fiber.Map{
 		"status":"Success",
 		"data": update,
@@ -82,6 +117,10 @@ func DeleteCartItem(c *fiber.Ctx) error{
 	if cartID == 0{
 		return service.SendError(c,401,"Did not receive cartID");
 	}
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,401,"Did not receive accountID");
+	}
 
 	cartItem,err := models.CartDetails(qm.Where("\"cartID\" = ?",cartID)).One(c.Context(),boil.GetContextDB()) 
 	if err != nil {
@@ -91,6 +130,18 @@ func DeleteCartItem(c *fiber.Ctx) error{
 	_,err = cartItem.Delete(c.Context(),boil.GetContextDB())
 	if err != nil {
 		return service.SendError(c, 500, "Failed to delete cart item")
+	}
+
+	//deleting cart cache after deletion
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID);
+	fmt.Println("redis key: ",redisKey);
+	cachedCart,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
+	if err == nil{
+		rdsErr := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err();
+		if rdsErr != nil {
+			fmt.Println("Failed to clear cache:", rdsErr)
+			fmt.Println("Cached cart:", cachedCart)
+		}
 	}
 
 	resp := fiber.Map{
@@ -105,6 +156,16 @@ func AddToCart(c *fiber.Ctx) error{
 	var cartDetail models.CartDetail
 	if err := c.BodyParser(&cartDetail); err != nil{
 		return service.SendError(c,400,"Invalid body");
+	}
+
+	//deleting cart cache after insertion
+	redisKey := fmt.Sprintf("cart:accountID=%d:",cartDetail.AccountID);
+	_, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
+	if err == nil{
+		rdsErr := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err();
+		if rdsErr != nil {
+			fmt.Println("Failed to clear cache:", rdsErr)
+		}
 	}
 
 	//checking if a product has already existed in the cart
@@ -197,6 +258,18 @@ func DeleteAllItems(c *fiber.Ctx) error{
 	_,err = cartToDelete.DeleteAll(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,"Couldn't delete cart items of the provided accountID");
+	}
+
+	//deleting cart cache after deletion of all items
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID);
+	fmt.Println("redis key: ",redisKey);
+	cachedCart,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
+	if err == nil{
+		rdsErr := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err();
+		if rdsErr != nil {
+			fmt.Println("Failed to clear cache:", rdsErr)
+			fmt.Println("Cached cart:", cachedCart)
+		}
 	}
 
 	resp := fiber.Map{

@@ -178,3 +178,70 @@ func AddressDelete(c *fiber.Ctx) error{
 
 	return c.JSON(resp);
 }
+
+func AddressFill(c *fiber.Ctx) error{
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID");
+	}
+
+	address,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND status = TRUE",accountID),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Please go set your default delivery address!");
+	}
+
+	return service.SendJSON(c,"Success",address,nil,"Successfully fetched the fill address");
+}
+
+func AddressQuickChange(c *fiber.Ctx) error{
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID")
+	}
+	addressID := c.QueryInt("addressID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive addressID")
+	}
+	toBeDisabled := c.QueryInt("toBeDisabled",0);
+	if toBeDisabled == 0{
+		return service.SendError(c,400,"Did not receive toBeDisabled")
+	}
+
+
+	toBeUpdated,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND \"addressID\" = ?",accountID,addressID),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Cannot find the specified address");
+	}
+	disableThis,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND \"addressID\" = ?",accountID,toBeDisabled),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Cannot find the specified address");
+	}
+
+	//update details
+	toBeUpdated.Status = true
+	disableThis.Status = false
+
+	_,err = toBeUpdated.Update(c.Context(),boil.GetContextDB(),boil.Infer())
+	if err != nil{
+		return service.SendError(c,500,"Cannot update the toBeUpdated address")
+	}
+
+	_,err = disableThis.Update(c.Context(),boil.GetContextDB(),boil.Infer())
+	if err != nil{
+		return service.SendError(c,500,"Cannot update the disableThis address")
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": toBeUpdated,
+		"message": "Successfully updated the address",
+	}
+
+	return c.JSON(resp);
+}

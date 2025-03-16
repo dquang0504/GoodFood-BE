@@ -2,6 +2,7 @@ package main
 
 import (
 	"GoodFood-BE/internal/database"
+	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/server"
 	"context"
 	"fmt"
@@ -46,6 +47,8 @@ func gracefulShutdown(fiberServer *server.FiberServer, dbService database.Servic
 	done <- true
 }
 
+var ctx = context.Background()
+
 func main() {
 	//Initialize database connection
 	dbService := database.New()
@@ -57,6 +60,10 @@ func main() {
 	if health["status"] != "up"{
 		log.Fatal("Database is not healthy. Exiting...")
 	}
+
+	//initialize redis connection
+	redisdatabase.InitRedis()
+	defer redisdatabase.Client.Close()
 
 	//Initialize Fiber server
 	server := server.New()

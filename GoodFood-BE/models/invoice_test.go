@@ -1264,7 +1264,7 @@ func testInvoicesSelect(t *testing.T) {
 }
 
 var (
-	invoiceDBTypes = map[string]string{`InvoiceID`: `integer`, `ShippingFee`: `real`, `TotalPrice`: `real`, `PaymentDate`: `date`, `PaymentMethod`: `boolean`, `Status`: `boolean`, `Note`: `character varying`, `CancelReason`: `character varying`, `ReceiveAddress`: `character varying`, `ReceiveName`: `character varying`, `ReceivePhone`: `character varying`, `AccountID`: `integer`, `InvoiceStatusID`: `integer`}
+	invoiceDBTypes = map[string]string{`InvoiceID`: `integer`, `ShippingFee`: `real`, `TotalPrice`: `real`, `PaymentDate`: `timestamp without time zone`, `PaymentMethod`: `boolean`, `Status`: `boolean`, `Note`: `character varying`, `CancelReason`: `character varying`, `ReceiveAddress`: `character varying`, `ReceiveName`: `character varying`, `ReceivePhone`: `character varying`, `AccountID`: `integer`, `InvoiceStatusID`: `integer`}
 	_              = bytes.MinRead
 )
 
