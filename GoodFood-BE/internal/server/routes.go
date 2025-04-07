@@ -17,7 +17,7 @@ import (
 func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://127.0.0.1:5173",
+		AllowOrigins:     "http://localhost:5173",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
 		AllowCredentials: true, // credentials require explicit origins
@@ -69,8 +69,28 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	dashboardGroup.Get("/piechart",handlers.GetPieChart)
 	dashboardGroup.Get("/barchart",handlers.GetBarChart)
 	//Routes related to Admin Invoice
-	adminInvoiceGroup := s.App.Group("api/admin",auth.AuthMiddleware)
-	adminInvoiceGroup.Get("/order",handlers.GetAdminInvoice)
+	adminInvoiceGroup := s.App.Group("api/admin/order",auth.AuthMiddleware)
+	adminInvoiceGroup.Get("",handlers.GetAdminInvoice)
+	adminInvoiceGroup.Get("/detail",handlers.GetAdminInvoiceDetail)
+	adminInvoiceGroup.Put("/update",handlers.UpdateInvoice)
+	//Routes related to Admin User
+	adminUserGroup := s.App.Group("api/admin/user",auth.AuthMiddleware)
+	adminUserGroup.Get("",handlers.GetAdminUsers)
+	adminUserGroup.Get("/detail",handlers.GetAdminUserDetail)
+	adminUserGroup.Post("/create",handlers.AdminUserCreate)
+	adminUserGroup.Put("/update",handlers.AdminUserUpdate)
+	//Routes related Admin Product Type
+	adminProductTypeGroup := s.App.Group("api/admin/product-type",auth.AuthMiddleware)
+	adminProductTypeGroup.Get("",handlers.GetAdminProductTypes)
+	adminProductTypeGroup.Get("/detail",handlers.GetAdminProductTypeDetail)
+	adminProductTypeGroup.Post("/create",handlers.AdminProductTypeCreate)
+	adminProductTypeGroup.Put("/update",handlers.AdminProductTypeUpdate)
+	//Routes related Admin Product
+	adminProductGroup := s.App.Group("api/admin/product",auth.AuthMiddleware)
+	adminProductGroup.Get("",handlers.GetAdminProducts)
+	adminProductGroup.Get("/detail",handlers.GetAdminProductDetail);
+	adminProductGroup.Post("/create",handlers.AdminProductCreate)
+	adminProductGroup.Put("/update",handlers.AdminProductUpdate)
 }
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {

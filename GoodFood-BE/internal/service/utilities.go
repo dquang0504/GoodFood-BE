@@ -9,6 +9,13 @@ func SendError(c *fiber.Ctx, statusCode int, message string) error{
 	})
 }
 
+func SendErrorStruct(c *fiber.Ctx, statusCode int, err interface{}) error{
+	return c.Status(statusCode).JSON(fiber.Map{
+		"status": "error",
+		"err": err,
+	})
+}
+
 func SendJSON(c *fiber.Ctx,status string, data interface{}, extras map[string]interface{},message string) error{
 	
 	//creating base response
