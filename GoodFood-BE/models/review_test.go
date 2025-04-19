@@ -1229,7 +1229,7 @@ func testReviewsSelect(t *testing.T) {
 }
 
 var (
-	reviewDBTypes = map[string]string{`ReviewID`: `integer`, `ReviewDate`: `date`, `Stars`: `integer`, `Comment`: `character varying`, `Status`: `boolean`, `ProductID`: `integer`, `AccountID`: `integer`, `InvoiceID`: `integer`}
+	reviewDBTypes = map[string]string{`ReviewID`: `integer`, `ReviewDate`: `timestamp without time zone`, `Stars`: `integer`, `Comment`: `character varying`, `Status`: `boolean`, `ProductID`: `integer`, `AccountID`: `integer`, `InvoiceID`: `integer`}
 	_             = bytes.MinRead
 )
 

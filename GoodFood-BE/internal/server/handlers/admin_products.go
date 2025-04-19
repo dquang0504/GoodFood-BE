@@ -46,7 +46,6 @@ func GetAdminProducts(c *fiber.Ctx) error{
 	}
 	//search and sort logic
 	if search != ""{
-		fmt.Println("Hello mister")
 		switch sort{
 			case "Type":
 				fetchType, err := models.ProductTypes(qm.Where("\"typeName\" ILIKE ?","%"+search+"%")).One(c.Context(),boil.GetContextDB());

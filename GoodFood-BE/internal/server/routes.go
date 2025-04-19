@@ -79,18 +79,24 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	adminUserGroup.Get("/detail",handlers.GetAdminUserDetail)
 	adminUserGroup.Post("/create",handlers.AdminUserCreate)
 	adminUserGroup.Put("/update",handlers.AdminUserUpdate)
-	//Routes related Admin Product Type
+	//Routes related to Admin Product Type
 	adminProductTypeGroup := s.App.Group("api/admin/product-type",auth.AuthMiddleware)
 	adminProductTypeGroup.Get("",handlers.GetAdminProductTypes)
 	adminProductTypeGroup.Get("/detail",handlers.GetAdminProductTypeDetail)
 	adminProductTypeGroup.Post("/create",handlers.AdminProductTypeCreate)
 	adminProductTypeGroup.Put("/update",handlers.AdminProductTypeUpdate)
-	//Routes related Admin Product
+	//Routes related to Admin Product
 	adminProductGroup := s.App.Group("api/admin/product",auth.AuthMiddleware)
 	adminProductGroup.Get("",handlers.GetAdminProducts)
 	adminProductGroup.Get("/detail",handlers.GetAdminProductDetail);
 	adminProductGroup.Post("/create",handlers.AdminProductCreate)
 	adminProductGroup.Put("/update",handlers.AdminProductUpdate)
+	//Routes related to Admin Statistics
+	adminStatisticGroup := s.App.Group("api/admin/statistic",auth.AuthMiddleware)
+	adminStatisticGroup.Get("",handlers.GetAdminStatistics)
+	//Routes related to Admin Reviews
+	adminReviewGroup := s.App.Group("api/admin/review",auth.AuthMiddleware)
+	adminReviewGroup.Get("",handlers.GetAdminReview)
 }
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {
