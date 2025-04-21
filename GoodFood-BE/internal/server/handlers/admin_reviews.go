@@ -3,7 +3,9 @@ package handlers
 import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
+	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -18,6 +20,7 @@ type ReviewCards struct{
 type ReviewResponse struct{
 	models.Review
 	ReviewAccount models.Account `json:"reviewAccount"`
+	ReviewProduct models.Product `json:"reviewProduct"`
 }
 func GetAdminReview(c *fiber.Ctx) error{
 	var cards ReviewCards
@@ -53,7 +56,7 @@ func GetAdminReview(c *fiber.Ctx) error{
 
 	if search != ""{
 		switch sort{
-			case "Tên sản phẩm":
+			case "Product Name":
 				//could return multiple products with a similar name
 				product, err := models.Products(qm.Where("\"productName\" ILIKE ?","%"+search+"%")).All(c.Context(),boil.GetContextDB());
 				if err != nil{
@@ -64,10 +67,20 @@ func GetAdminReview(c *fiber.Ctx) error{
 				for _, p := range product{
 					ids = append(ids, p.ProductID)
 				}
-				if(len(ids) > 0){
-					queryMods = append(queryMods, qm.WhereIn("\"productID\"",convertIntSliceToInterface(ids)...))
+				if len(ids) > 0 {
+					fmt.Println(ids)
+					queryMods = append(queryMods, qm.WhereIn("\"productID\" in ?", convertIntSliceToInterface(ids)...))
 				}
-			}
+			case "Stars":
+				intSearch, err := strconv.Atoi(search)
+				if err != nil{
+					return service.SendError(c,400, err.Error())
+				}
+				queryMods = append(queryMods, qm.Where("stars = ?",intSearch))
+			case "Comment":
+				queryMods = append(queryMods, qm.Where("\"comment\" ILIKE ?","%"+search+"%"))
+			}	
+				
 	}
 
 	totalReviews, err := models.Reviews(queryMods...).Count(c.Context(),boil.GetContextDB());
@@ -76,7 +89,7 @@ func GetAdminReview(c *fiber.Ctx) error{
 	}
 	totalPage := int(math.Ceil(float64(totalReviews)/6))
 
-	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset), qm.OrderBy("\"reviewID\" DESC"),qm.Load(models.ReviewRels.AccountIDAccount))
+	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset), qm.OrderBy("\"reviewID\" DESC"),qm.Load(models.ReviewRels.AccountIDAccount), qm.Load(models.ReviewRels.ProductIDProduct))
 	reviews, err := models.Reviews(queryMods...).All(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500, err.Error());
@@ -87,6 +100,7 @@ func GetAdminReview(c *fiber.Ctx) error{
 		response[i] = ReviewResponse{
 			Review: *r,
 			ReviewAccount: *r.R.AccountIDAccount,
+			ReviewProduct: *r.R.ProductIDProduct,
 		}
 	}
 
@@ -107,4 +121,24 @@ func convertIntSliceToInterface(s []int) []interface{}{
 		result[i] = v
 	}
 	return result
+}
+
+func GetAdminReviewDetail(c *fiber.Ctx) error{
+
+	reviewID := c.QueryInt("reviewID",0);
+	if reviewID == 0{
+		return service.SendError(c,400,"Did not receive reviewID");
+	}
+	review, err := models.Reviews(qm.Where("\"reviewID\" = ?",reviewID)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": review,
+		"message": "Successfully fetched review details!",
+	}
+
+	return c.JSON(resp);
 }
