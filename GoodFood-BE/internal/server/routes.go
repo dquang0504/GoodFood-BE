@@ -17,7 +17,7 @@ import (
 func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:5173",
+		AllowOrigins:     "http://localhost:5173, http://localhost:5000",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
 		AllowCredentials: true, // credentials require explicit origins
@@ -98,6 +98,8 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	adminReviewGroup := s.App.Group("api/admin/review",auth.AuthMiddleware)
 	adminReviewGroup.Get("",handlers.GetAdminReview)
 	adminReviewGroup.Get("/detail",handlers.GetAdminReviewDetail)
+	adminReviewGroup.Post("/reply",handlers.InsertReviewReply)
+	adminReviewGroup.Put("/update",handlers.UpdateReviewReply)
 }
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {
