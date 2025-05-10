@@ -97,6 +97,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	//Routes related to Admin Reviews
 	adminReviewGroup := s.App.Group("api/admin/review",auth.AuthMiddleware)
 	adminReviewGroup.Get("",handlers.GetAdminReview)
+	adminReviewGroup.Get("/review-analysis",handlers.GetAdminReviewAnalysis)
 	adminReviewGroup.Get("/detail",handlers.GetAdminReviewDetail)
 	adminReviewGroup.Post("/reply",handlers.InsertReviewReply)
 	adminReviewGroup.Put("/update",handlers.UpdateReviewReply)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -26,7 +27,24 @@ type ReviewResponse struct{
 	ReviewAccount models.Account `json:"reviewAccount"`
 	ReviewProduct models.Product `json:"reviewProduct"`
 }
+
+// Define a struct to hold the response data
+type ClauseAnalysis struct {
+    Clause    string `json:"clause"`
+    Sentiment string `json:"sentiment"`
+}
+
+type AnalyzeResult struct {
+	ReviewID int 			  `json:"reviewID"`
+    Review   string           `json:"review"`
+    Clauses  []string         `json:"clauses"`
+    Analysis []ClauseAnalysis `json:"analysis"`
+    Summary  string           `json:"summary"`
+}
+
 func GetAdminReview(c *fiber.Ctx) error{
+	//establishing connection to python backend
+	client := resty.New()
 	var cards ReviewCards
 	err := queries.Raw(`
 		SELECT COALESCE(COUNT(*),0) AS total_review,
@@ -60,6 +78,14 @@ func GetAdminReview(c *fiber.Ctx) error{
 		if errTime != nil {
 			return service.SendError(c, 400, "Invalid format for ngayTo (expect yyyy-mm-dd)")
 		}
+	}
+
+	//creating redisKey for review list
+	redisKey := fmt.Sprintf("review:list:page=%d:sort=%s:search=%s:ngayFrom=%s:ngayTo=%s",page,sort,search,ngayFrom,ngayTo)
+	//fetching redis key
+	cachedReview, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
+	if err == nil{
+		return c.JSON(json.RawMessage(cachedReview))
 	}
 
 	queryMods := []qm.QueryMod{}
@@ -108,6 +134,27 @@ func GetAdminReview(c *fiber.Ctx) error{
 		return service.SendError(c,500, err.Error());
 	}
 
+	//sending review list to python backend for sentiment analysis
+	//getting comments from review list
+	comments := []string{}
+	for _, c := range reviews{
+		comments = append(comments, c.Comment)
+	}
+	reviewIDs := []int{}
+	for _,c := range reviews{
+		reviewIDs = append(reviewIDs, c.ReviewID)
+	}
+
+	result := []AnalyzeResult{}
+	_, err = client.R().
+		SetHeader("Content-Type","application/json").
+		SetBody(map[string]interface{}{"review": comments, "reviewID": reviewIDs}).
+		SetResult(&result).
+		Post("http://192.168.240.1:5000/analyze")
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+
 	response := make([]ReviewResponse,len(reviews));
 	for i, r := range reviews{
 		response[i] = ReviewResponse{
@@ -120,13 +167,132 @@ func GetAdminReview(c *fiber.Ctx) error{
 	resp := fiber.Map{
 		"status": "Success",
 		"data": response,
+		"result": result,
 		"cards": cards,
 		"totalPage": totalPage, 
 		"message": "Successfully fetched review values!",
 	}
 
+	savingKeyJson, _ := json.Marshal(resp);
+	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10 * 24 * time.Hour)
+	if rdsErr != nil{
+		fmt.Println("Failed to cache review data: ",rdsErr)
+	}
+
 	return c.JSON(resp);
 }
+
+func GetAdminReviewAnalysis(c *fiber.Ctx) error{
+	//establishing connection to python backend
+	client := resty.New()
+
+	page := c.QueryInt("page",0);
+	if page == 0{
+		return service.SendError(c,401,"Did not receive page");
+	}
+	sort := c.Query("sort","Positive Sentiment");
+
+	redisKey := fmt.Sprintf("reviewAnalysis:list:page=%d:sort=%s",page,sort)
+	//fetching redis key
+	cachedReviewAnalysis, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
+	if err == nil{
+		return c.JSON(json.RawMessage(cachedReviewAnalysis))
+	}
+
+	//sending all reviews to python to analyze
+	//here
+	reviews, err := models.Reviews().All(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+
+	//sending review list to python backend for sentiment analysis
+	//getting comments from review list
+	comments := []string{}
+	for _, c := range reviews{
+		comments = append(comments, c.Comment)
+	}
+	reviewIDs := []int{}
+	for _,c := range reviews{
+		reviewIDs = append(reviewIDs, c.ReviewID)
+	}
+
+	result := []AnalyzeResult{}
+	_, err = client.R().
+		SetHeader("Content-Type","application/json").
+		SetBody(map[string]interface{}{"review": comments, "reviewID": reviewIDs}).
+		SetResult(&result).
+		Post("http://192.168.240.1:5000/analyze")
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+
+	sortingResult := []AnalyzeResult{}
+
+	switch sort{
+		case "Positive Sentiment":
+			sortingResult = appendSortingResult(result,sort);
+		case "Negative Sentiment":
+			sortingResult = appendSortingResult(result,sort);
+		case "Neutral Sentiment":
+			sortingResult = appendSortingResult(result,sort);
+		case "Mixed Sentiment":
+			sortingResult = appendSortingResult(result,sort);
+		default:
+			fmt.Println("Do nothing in fallback")
+	}
+
+
+	resp := fiber.Map{
+		"status": "Success",
+		"result": sortingResult,
+		"message": "Successfully fetched review values!",
+	}
+
+	savingKeyJson, _ := json.Marshal(resp);
+	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10 * 24 * time.Hour)
+	if rdsErr != nil{
+		fmt.Println("Failed to cache cart data: ",rdsErr)
+	}
+
+	return c.JSON(resp);
+}
+
+func appendSortingResult(result []AnalyzeResult, sort string) []AnalyzeResult {
+	sortingResult := []AnalyzeResult{}
+	keywords := []string{"Khen", "Chê", "Ý kiến trung lập"}
+
+	for _, s := range result {
+		count := 0
+		for _, keyword := range keywords {
+			if strings.Contains(s.Summary, keyword) {
+				count++
+			}
+		}
+
+		switch sort {
+			case "Positive Sentiment":
+				if count == 1 && strings.Contains(s.Summary, "Khen") {
+					sortingResult = append(sortingResult, s)
+				}
+			case "Negative Sentiment":
+				if count == 1 && strings.Contains(s.Summary, "Chê") {
+					sortingResult = append(sortingResult, s)
+				}
+			case "Neutral Sentiment":
+				if count == 1 && strings.Contains(s.Summary, "Ý kiến trung lập") {
+					sortingResult = append(sortingResult, s)
+				}
+			case "Mixed Sentiment":
+				if count >= 2 {
+					sortingResult = append(sortingResult, s)
+				}
+		}
+	}
+
+	return sortingResult
+}
+
 
 func convertIntSliceToInterface(s []int) []interface{}{
 	result := make([]interface{},len(s))
@@ -134,19 +300,6 @@ func convertIntSliceToInterface(s []int) []interface{}{
 		result[i] = v
 	}
 	return result
-}
-
-// Define a struct to hold the response data
-type ClauseAnalysis struct {
-    Clause    string `json:"clause"`
-    Sentiment string `json:"sentiment"`
-}
-
-type AnalyzeResult struct {
-    Review   string           `json:"review"`
-    Clauses  []string         `json:"clauses"`
-    Analysis []ClauseAnalysis `json:"analysis"`
-    Summary  string           `json:"summary"`
 }
 
 func GetAdminReviewDetail(c *fiber.Ctx) error{
@@ -184,7 +337,7 @@ func GetAdminReviewDetail(c *fiber.Ctx) error{
 	result := []AnalyzeResult{}
 	_, err = client.R().
 		SetHeader("Content-Type","application/json").
-		SetBody(map[string]interface{}{"review": []string{review.Comment}}).
+		SetBody(map[string]interface{}{"review": []string{review.Comment}, "reviewID": []int{reviewID}}).
 		SetResult(&result).
 		Post("http://192.168.240.1:5000/analyze")
 	if err != nil{
@@ -201,7 +354,7 @@ func GetAdminReviewDetail(c *fiber.Ctx) error{
 	}
 
 	savingKeyJson, _ := json.Marshal(response);
-	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson,10*time.Minute);
+	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson,10*24*time.Hour);
 	if rdsErr != nil{
 		fmt.Println("Failed to cache review data: ",rdsErr)
 	}
