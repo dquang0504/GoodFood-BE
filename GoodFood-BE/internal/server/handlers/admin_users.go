@@ -113,6 +113,7 @@ type UserError struct{
 	ErrUsername string `json:"errUsername"`
 	ErrPhone string `json:"errPhone"`
 	ErrEmail string `json:"errEmail"`
+	ErrPassword string `json:"errPassword"`
 }
 
 func AdminUserCreate(c *fiber.Ctx) error{
@@ -190,7 +191,6 @@ func validationUser(user *models.Account) (bool,UserError){
 			isValid = false;
 		}
 	}
-	
 	if user.Username == ""{
 		error.ErrUsername = "Please input your username!"
 		isValid = false;
@@ -208,6 +208,10 @@ func validationUser(user *models.Account) (bool,UserError){
 			error.ErrPhone = "Phone number already exists!"
 			isValid = false;
 		}
+	}
+	if user.Password == ""{
+		error.ErrPassword = "Please input your password!"
+		isValid = false;
 	}
 	return isValid,error;
 }

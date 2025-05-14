@@ -9,7 +9,37 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	"golang.org/x/crypto/bcrypt"
 )
+
+func HandleRegister(c *fiber.Ctx) error{
+	var user models.Account
+	if err := c.BodyParser(&user); err != nil{
+		return service.SendError(c,400,err.Error());
+	}
+
+	if valid, errObj := validationUser(&user); !valid{
+		return service.SendErrorStruct(c,500,errObj)
+	}
+
+	//encrypting password
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(user.Password),bcrypt.DefaultCost)
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	user.Password = string(hashedPass);
+	err = user.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	response := fiber.Map{
+		"status": "Success",
+		"data": user,
+		"message": "Successfully registered!",
+	}
+	return c.JSON(response);
+}
 
 func HandleLogin(c *fiber.Ctx) error{
 	//fetching parameters from url
@@ -20,10 +50,14 @@ func HandleLogin(c *fiber.Ctx) error{
 	}
 
 	//comparing login details with users db
-	user, err := models.Accounts(qm.Where("username = ? AND password = ?", username, password)).One(c.Context(), boil.GetContextDB())
-
+	user, err := models.Accounts(qm.Where("username = ?", username)).One(c.Context(), boil.GetContextDB())
 	if err != nil{
 		return service.SendError(c,500,"User not found!")
+	}
+
+	//comparing 2 hashes
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password),[]byte(password)); err != nil{
+		return service.SendError(c,401, err.Error());
 	}
 
 	//provide user with a token

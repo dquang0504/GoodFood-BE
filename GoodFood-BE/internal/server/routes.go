@@ -32,6 +32,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 
 	//Routes related to accounts
 	userGroup := s.App.Group("/api/user")
+	userGroup.Post("/register",handlers.HandleRegister)
 	userGroup.Get("/login",handlers.HandleLogin)
 	userGroup.Get("/refresh-token",handlers.RefreshToken)
 	//Routes related to products
@@ -62,6 +63,9 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	//Routes related to invoice
 	invoiceGroup := s.App.Group("api/invoice",auth.AuthMiddleware)
 	invoiceGroup.Post("/pay",handlers.InvoicePay)
+	//Routes related to order history
+	orderHistoryGroup := s.App.Group("api/order-history",auth.AuthMiddleware)
+	orderHistoryGroup.Get("",handlers.GetOrderHistory)
 	//Routes related to Admin Dashboard
 	dashboardGroup := s.App.Group("api/admin",auth.AuthMiddleware)
 	dashboardGroup.Get("/dashboard",handlers.GetDashboard)
