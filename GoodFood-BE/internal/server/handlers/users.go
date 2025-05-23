@@ -7,18 +7,21 @@ import (
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func HandleRegister(c *fiber.Ctx) error{
+	hasPassword := true;
+	hasUsername := true
 	var user models.Account
 	if err := c.BodyParser(&user); err != nil{
 		return service.SendError(c,400,err.Error());
 	}
 
-	if valid, errObj := validationUser(&user); !valid{
+	if valid, errObj := validationUser(&user,hasPassword,hasUsername); !valid{
 		return service.SendErrorStruct(c,500,errObj)
 	}
 
@@ -57,7 +60,7 @@ func HandleLogin(c *fiber.Ctx) error{
 
 	//comparing 2 hashes
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password),[]byte(password)); err != nil{
-		return service.SendError(c,401, err.Error());
+		return service.SendError(c,401, "Username or password does not match!");
 	}
 
 	//provide user with a token
@@ -88,6 +91,51 @@ func HandleLogin(c *fiber.Ctx) error{
 		"message": "Successfully fetched login details!",
 	}
 	return c.JSON(response);
+}
+
+func HandleUpdateAccount(c *fiber.Ctx) error{
+	hasPassword := false;
+	hasUsername := false;
+	var body models.Account
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID!");
+	}
+
+	err := c.BodyParser(&body);
+	if err != nil{
+		return service.SendError(c,400,err.Error());
+	}
+	account, err := models.Accounts(qm.Where("\"accountID\" = ?",accountID)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	if ok, errObj := validationUser(&body,hasPassword,hasUsername); !ok{
+		return service.SendErrorStruct(c,400,errObj);
+	}
+
+	//start updating account info
+	account.FullName = body.FullName
+	account.PhoneNumber = null.StringFrom(body.PhoneNumber.String)
+	account.Email = body.Email
+	fmt.Println("Body: ",body.Avatar.String)
+	//start here
+	if body.Avatar.String != ""{
+		account.Avatar = null.StringFrom(body.Avatar.String)
+	}
+	fmt.Println("Account: ",account.Avatar)
+	_, err = account.Update(c.Context(),boil.GetContextDB(),boil.Infer());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": account,
+		"message": "Successfully updated account information!",
+	}
+
+	return c.JSON(resp);
 }
 
 func RefreshToken(c *fiber.Ctx) error{

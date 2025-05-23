@@ -117,12 +117,14 @@ type UserError struct{
 }
 
 func AdminUserCreate(c *fiber.Ctx) error{
+	hasPassword := false;
+	hasUsername := true;
 	var user models.Account
 	if err := c.BodyParser(&user); err != nil{
 		return service.SendError(c,400,"Invalid body!");
 	}
 
-	if valid, errObj := validationUser(&user); !valid{
+	if valid, errObj := validationUser(&user,hasPassword,hasUsername); !valid{
 		return service.SendErrorStruct(c,400,errObj);
 	}
 
@@ -175,7 +177,7 @@ func AdminUserUpdate(c *fiber.Ctx) error{
 
 }
 
-func validationUser(user *models.Account) (bool,UserError){
+func validationUser(user *models.Account, hasPassword bool,hasUsername bool) (bool,UserError){
 	var error UserError
 	isValid := true
 	if user.FullName == ""{
@@ -191,13 +193,15 @@ func validationUser(user *models.Account) (bool,UserError){
 			isValid = false;
 		}
 	}
-	if user.Username == ""{
-		error.ErrUsername = "Please input your username!"
-		isValid = false;
-	}else if res, err := models.Accounts(qm.Where("username = ?",user.Username)).Exists(context.Background(),boil.GetContextDB()); err == nil{
-		if res{
-			error.ErrUsername = "Username already exists!"
+	if (hasUsername){
+		if user.Username == ""{
+			error.ErrUsername = "Please input your username!"
 			isValid = false;
+		}else if res, err := models.Accounts(qm.Where("username = ?",user.Username)).Exists(context.Background(),boil.GetContextDB()); err == nil{
+			if res{
+				error.ErrUsername = "Username already exists!"
+				isValid = false;
+			}
 		}
 	}
 	if user.PhoneNumber.String == ""{
@@ -209,9 +213,11 @@ func validationUser(user *models.Account) (bool,UserError){
 			isValid = false;
 		}
 	}
-	if user.Password == ""{
-		error.ErrPassword = "Please input your password!"
-		isValid = false;
+	if(hasPassword){
+		if user.Password == ""{
+			error.ErrPassword = "Please input your password!"
+			isValid = false;
+		}
 	}
 	return isValid,error;
 }
