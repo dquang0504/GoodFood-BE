@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/auth"
+	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
 	"fmt"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofrs/uuid"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -135,6 +138,127 @@ func HandleUpdateAccount(c *fiber.Ctx) error{
 		"message": "Successfully updated account information!",
 	}
 
+	return c.JSON(resp);
+}
+
+type ForgotPassStruct struct{
+	Email string `json:"email"`
+	CodeOTP string `json:"codeOTP"`
+}
+func HandleForgotPassword(c *fiber.Ctx) error{
+	body := ForgotPassStruct{}
+	err := c.BodyParser(&body);
+	if err != nil{
+		return service.SendError(c,400,err.Error())
+	}
+	if body.Email == ""{
+		return service.SendError(c,400,"Please input your email!");
+	}
+	
+	token, err := uuid.NewV4();
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+
+	resetLink := fmt.Sprintf("http://localhost:5173/reset-password?token=%s",token.String());
+	//only send mmail if the user exists in database
+	_, err = models.Accounts(qm.Where("email = ?",body.Email)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		resp := fiber.Map{
+			"status": "Succes",
+			"message": "If the email is registered, a password reset link will be sent to your inbox.",
+		}
+		return c.JSON(resp);
+	}
+
+	//caching token key if user exists
+	redisKey := fmt.Sprintf("resetPass:token=%s",token.String())
+	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,body.Email, 10*time.Minute).Err()
+	if rdsErr != nil{
+		fmt.Println("Failed to cache cart data: ",rdsErr)
+	}
+
+	err = service.SendResetPasswordEmail(body.Email,resetLink)
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	resp := fiber.Map{
+		"status": "Succes",
+		"data": token,
+		"message": "If the email is registered, a password reset link will be sent to your inbox.",
+	}
+	return c.JSON(resp);
+}
+
+func ValidateResetToken(c *fiber.Ctx) error{
+	paramToken := c.Query("token","");
+	if paramToken == ""{
+		return service.SendError(c,400,"Did not receive token!");
+	}
+	redisKey := fmt.Sprintf("resetPass:token=%s",paramToken);
+	cachedToken, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
+	if err == nil{
+		fmt.Println("Hello teacher");
+		resp := fiber.Map{
+			"status": "Success",
+			"isValid": true,
+			"email": cachedToken,
+			"message": "Successfully validated reset password token!",
+		}
+		return c.JSON(resp);
+	}
+	return nil
+}
+
+type ResetPass struct{
+	NewPass string `json:"newPass"`
+	ConfirmPass string `json:"confirmPass"`
+	Email string `json:"email"`
+}
+func HandleResetPassword(c *fiber.Ctx) error{
+	body := ResetPass{}
+	err := c.BodyParser(&body);
+	if err != nil{
+		return service.SendError(c,400,err.Error())
+	}
+	
+	if(body.NewPass == ""){
+		return service.SendError(c,400,"Please input your new password!");
+	}
+
+	//encrypting password
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(body.NewPass),bcrypt.DefaultCost);
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	//finding user with email from body
+	user, err := models.Accounts(qm.Where("email = ?",body.Email)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	//updating password
+	user.Password = string(hashedPass);
+	_, err = user.Update(c.Context(),boil.GetContextDB(),boil.Infer());
+	if err != nil{
+		return service.SendError(c,500, err.Error());
+	}
+
+	//deleting token in redis
+	paramToken := c.Query("token","");
+	if paramToken != ""{
+		redisKey := fmt.Sprintf("resetPass:token=%s",paramToken);
+		err := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err();
+		if err != nil{
+			fmt.Println("Failed to delete reset token from Redis:", err)
+		}
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": user,
+		"message": "Successfully reset password!",
+	}
 	return c.JSON(resp);
 }
 
