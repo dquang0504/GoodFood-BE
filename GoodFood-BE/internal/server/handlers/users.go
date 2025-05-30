@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/auth"
+	"GoodFood-BE/internal/jobs"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofrs/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -145,6 +147,7 @@ type ForgotPassStruct struct{
 	Email string `json:"email"`
 	CodeOTP string `json:"codeOTP"`
 }
+var asynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: "localhost:6379",Password: "",DB: 0})
 func HandleForgotPassword(c *fiber.Ctx) error{
 	body := ForgotPassStruct{}
 	err := c.BodyParser(&body);
@@ -178,10 +181,20 @@ func HandleForgotPassword(c *fiber.Ctx) error{
 		fmt.Println("Failed to cache cart data: ",rdsErr)
 	}
 
-	err = service.SendResetPasswordEmail(body.Email,resetLink)
+	//creating email sending task
+	task, err := jobs.NewResetPasswordEmailTask(body.Email,resetLink);
 	if err != nil{
-		return service.SendError(c,500,err.Error());
+		return service.SendError(c,500, err.Error())
 	}
+	//enqueuing
+	_,err = asynqClient.Enqueue(task)
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+	// err = service.SendResetPasswordEmail(body.Email,resetLink)
+	// if err != nil{
+	// 	return service.SendError(c,500,err.Error());
+	// }
 
 	resp := fiber.Map{
 		"status": "Succes",

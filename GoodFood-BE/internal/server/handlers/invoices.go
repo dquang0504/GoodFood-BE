@@ -8,9 +8,13 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/boil"
 )
 
+//can make a custom InvoiceDetail slice that includes models.Product so that I can parse it from
+//the payload
+
 type InvoicePayload struct{
 	Invoice models.Invoice `json:"invoice"`
 	InvoiceDetails []models.InvoiceDetail `json:"invoiceDetails"`
+	Products []models.Product `json:"product"`
 }
 
 func InvoicePay(c *fiber.Ctx) error{
@@ -24,7 +28,7 @@ func InvoicePay(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 
-	//insert invoice details
+	//insert invoice details and link corresponding products
 	for _,detail := range payload.InvoiceDetails{
 		detail.InvoiceID = payload.Invoice.InvoiceID
 		if err := detail.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
@@ -34,8 +38,8 @@ func InvoicePay(c *fiber.Ctx) error{
 	
 	resp := fiber.Map{
 		"status": "Success",
-		"data": payload.InvoiceDetails,
-		"message": "Successfully created new invoice",
+		"data": payload,
+		"message": "Successfully created new invoice!",
 	}
 
 	return c.JSON(resp);

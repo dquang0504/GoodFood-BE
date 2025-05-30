@@ -3,13 +3,21 @@
 # Build the application
 all: build test
 
-build:
+build-api:
 	@echo "Building..."
 	@go build -o main cmd/api/main.go
 
 # Run the application
-run:
+run-api:
 	@go run cmd/api/main.go
+
+build-worker:
+	@echo "Building..."
+	@go build -o worker cmd/worker/main.go
+
+# Run the worker
+run-worker:
+	@go run cmd/worker/main.go
 # Create DB container
 docker-run:
 	@docker compose up --build
