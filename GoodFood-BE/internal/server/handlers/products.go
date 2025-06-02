@@ -299,10 +299,27 @@ func softmax(logits []float32) []float32{
 	return exp
 }
 
+type Star struct{
+	FiveStars int `json:"fiveStars"`
+	FourStars int `json:"fourStars"`
+	ThreeStars int `json:"threeStars"`
+	TwoStars int `json:"twoStars"`
+	OneStars int `json:"oneStars"`
+}
+type ProductDetailResponse struct{
+	models.Product `json:"product"`
+	FiveStarsReview []ReviewResponse `json:"review"`
+	Stars Star `json:"stars"`
+}
 func GetDetail(c *fiber.Ctx) error{
+	detailedResponse := ProductDetailResponse{}
 	id := c.Query("id","");
 	if id == ""{
 		return service.SendError(c,500,"ID not found");
+	}
+	star := c.QueryInt("star",0);
+	if star == 0{
+		star = 5
 	}
 
 	//creating redis key
@@ -313,14 +330,46 @@ func GetDetail(c *fiber.Ctx) error{
 		return c.JSON(json.RawMessage(cachedDetail))
 	}
 	
+	//fetching and setting data of ProductDetailResponse
 	detail, err := models.Products(qm.Where("\"productID\" = ?",id)).One(c.Context(),boil.GetContextDB());
 	if err != nil {
 		return service.SendError(c, 500, "product not found");
 	}
+	detailedResponse.Product = *detail
+
+	
+	review, err := models.Reviews(qm.Where("\"productID\" = ?",id),qm.Load(models.ReviewRels.AccountIDAccount),qm.Load(models.ReviewRels.ProductIDProduct),qm.Load(models.ReviewRels.ReviewIDReviewImages), qm.Load(models.ReviewRels.ReviewIDReplies)).All(c.Context(),boil.GetContextDB());
+	if err != nil {
+		return service.SendError(c, 500, err.Error());
+	}
+	reviewResult := make([]ReviewResponse,len(review));
+	for i, r := range review{
+		reviewResult[i] = ReviewResponse{
+			Review: *r,
+			ReviewAccount: *r.R.AccountIDAccount,
+			ReviewProduct: *r.R.ProductIDProduct,
+			ReviewImages: r.R.ReviewIDReviewImages,
+			ReviewReply: r.R.ReviewIDReplies,
+		}
+	}
+	fmt.Println("Đây là review: ",review);
+	fmt.Println(id, " ",star);
+	detailedResponse.FiveStarsReview = reviewResult
+	
+	fiveStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 5",id)).Count(c.Context(),boil.GetContextDB())
+	detailedResponse.Stars.FiveStars = int(fiveStars)
+	fourStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 4",id)).Count(c.Context(),boil.GetContextDB())
+	detailedResponse.Stars.FourStars = int(fourStars)
+	threeStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 3",id)).Count(c.Context(),boil.GetContextDB())
+	detailedResponse.Stars.ThreeStars = int(threeStars)
+	twoStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 2",id)).Count(c.Context(),boil.GetContextDB())
+	detailedResponse.Stars.TwoStars = int(twoStars)
+	oneStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 1",id)).Count(c.Context(),boil.GetContextDB())
+	detailedResponse.Stars.OneStars = int(oneStars)
 
 	resp := fiber.Map{
 		"status": "Success",
-		"data": detail,
+		"data": detailedResponse,
 		"message": "Successfully fetched detailed product!",
 	}
 

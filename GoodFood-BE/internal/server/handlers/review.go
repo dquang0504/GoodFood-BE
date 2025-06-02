@@ -3,6 +3,7 @@ package handlers
 import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -53,23 +54,36 @@ func GetReviewData(c *fiber.Ctx) error{
 	}
 	return c.JSON(resp);
 }
-
-func  HandleSubmitReview(c *fiber.Ctx) error{
-	body := models.Review{}
+type ReviewSubmitResponse struct{
+	models.Review
+	ReviewImages []models.ReviewImage `json:"reviewImages"`
+}
+func HandleSubmitReview(c *fiber.Ctx) error{
+	body := ReviewSubmitResponse{}
 	err := c.BodyParser(&body);
 	if err != nil{
 		return service.SendError(c,400,err.Error());
 	}
-
+	//insert new review
 	err = body.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
+	}
+	//insert its corresponding review images
+	var reviewImages = body.ReviewImages
+	for i := range reviewImages{
+		reviewImages[i].ReviewID = body.ReviewID
+		fmt.Println(reviewImages[i]);
+		err = reviewImages[i].Insert(c.Context(),boil.GetContextDB(),boil.Infer());
+		if err != nil{
+			return service.SendError(c,500,err.Error());
+		}
 	}
 
 	resp := fiber.Map{
 		"status": "Success",
 		"data": body,
-		"message": "Successfully fetched product to review!",
+		"message": "Successfully submitted product review!",
 	}
 	return c.JSON(resp);
 }

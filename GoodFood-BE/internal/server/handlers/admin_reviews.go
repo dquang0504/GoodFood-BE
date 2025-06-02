@@ -26,6 +26,8 @@ type ReviewResponse struct{
 	models.Review
 	ReviewAccount models.Account `json:"reviewAccount"`
 	ReviewProduct models.Product `json:"reviewProduct"`
+	ReviewImages models.ReviewImageSlice `json:"reviewImages"`
+	ReviewReply models.ReplySlice `json:"reviewReply"`
 }
 
 // Define a struct to hold the response data
