@@ -5,6 +5,7 @@ import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -313,17 +314,16 @@ type ProductDetailResponse struct{
 }
 func GetDetail(c *fiber.Ctx) error{
 	detailedResponse := ProductDetailResponse{}
-	id := c.Query("id","");
-	if id == ""{
+	id := c.QueryInt("id",0);
+	if id == 0{
 		return service.SendError(c,500,"ID not found");
 	}
-	star := c.QueryInt("star",0);
-	if star == 0{
-		star = 5
-	}
+	filter := c.Query("filter","All");
+	page := c.QueryInt("page",1);
+	offset := (page - 1) * 3;
 
 	//creating redis key
-	redisKey := fmt.Sprintf("product:detail:%s",id)
+	redisKey := fmt.Sprintf("product:detail:%d:filter=%s:page=%d",id,filter,page)
 	//checking if redis key exists
 	cachedDetail,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
 	if err == nil{
@@ -337,25 +337,16 @@ func GetDetail(c *fiber.Ctx) error{
 	}
 	detailedResponse.Product = *detail
 
-	
-	review, err := models.Reviews(qm.Where("\"productID\" = ?",id),qm.Load(models.ReviewRels.AccountIDAccount),qm.Load(models.ReviewRels.ProductIDProduct),qm.Load(models.ReviewRels.ReviewIDReviewImages), qm.Load(models.ReviewRels.ReviewIDReplies)).All(c.Context(),boil.GetContextDB());
-	if err != nil {
-		return service.SendError(c, 500, err.Error());
+	//filter logic
+	reviewResult, err, totalPage := reviewDisplay(c.Context(),id, filter,offset);
+	if err != nil{
+		return service.SendError(c,500,err.Error());
 	}
-	reviewResult := make([]ReviewResponse,len(review));
-	for i, r := range review{
-		reviewResult[i] = ReviewResponse{
-			Review: *r,
-			ReviewAccount: *r.R.AccountIDAccount,
-			ReviewProduct: *r.R.ProductIDProduct,
-			ReviewImages: r.R.ReviewIDReviewImages,
-			ReviewReply: r.R.ReviewIDReplies,
-		}
-	}
-	fmt.Println("Đây là review: ",review);
-	fmt.Println(id, " ",star);
 	detailedResponse.FiveStarsReview = reviewResult
+
+	//nên gắn key params vào cho redis key vì lúc này cần phân biết giưa các redis key với nhau
 	
+	//counting total number of reviews for each rating	
 	fiveStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 5",id)).Count(c.Context(),boil.GetContextDB())
 	detailedResponse.Stars.FiveStars = int(fiveStars)
 	fourStars, _ := models.Reviews(qm.Where("\"productID\" = ? AND stars = 4",id)).Count(c.Context(),boil.GetContextDB())
@@ -370,6 +361,7 @@ func GetDetail(c *fiber.Ctx) error{
 	resp := fiber.Map{
 		"status": "Success",
 		"data": detailedResponse,
+		"totalPage": totalPage,
 		"message": "Successfully fetched detailed product!",
 	}
 
@@ -378,6 +370,54 @@ func GetDetail(c *fiber.Ctx) error{
 	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData,30*time.Minute)
 
 	return c.JSON(resp);
+}
+
+func reviewDisplay(ctx context.Context,id int, filter string, offset int) (reviews []ReviewResponse,error error, totalPage int){
+	queries := []qm.QueryMod{}
+	queries = append(queries, qm.Where("\"productID\" = ?",id))
+
+	if filter != "All"{
+		star, err := strconv.Atoi(filter);
+		if err != nil || star < 1 || star > 5{
+			return nil,fmt.Errorf("invalid star filter"), 0;
+		}
+		queries = append(queries, qm.Where("stars = ?",star))
+	}
+
+	//calculating total page
+	totalReview, err := models.Reviews(queries...).Count(context.Background(),boil.GetContextDB())
+	if err != nil{
+		return nil,fmt.Errorf(err.Error()),0;
+	}
+	totalPage = int(math.Ceil(float64(totalReview)/3));
+
+	//loading necessary references
+	queries = append(queries, 
+		qm.Load(models.ReviewRels.AccountIDAccount),
+		qm.Load(models.ReviewRels.ProductIDProduct),
+		qm.Load(models.ReviewRels.ReviewIDReviewImages),
+		qm.Load(models.ReviewRels.ReviewIDReplies),
+		qm.Offset(offset),
+		qm.Limit(3),
+		qm.OrderBy("\"reviewID\""),
+	)
+
+	review, err := models.Reviews(queries...).All(ctx,boil.GetContextDB());
+	if err != nil{
+		return nil,err,totalPage
+	}
+	
+	reviewResult := make([]ReviewResponse,len(review));
+	for i, r := range review{
+		reviewResult[i] = ReviewResponse{
+			Review: *r,
+			ReviewAccount: *r.R.AccountIDAccount,
+			ReviewProduct: *r.R.ProductIDProduct,
+			ReviewImages: r.R.ReviewIDReviewImages,
+			ReviewReply: r.R.ReviewIDReplies,
+		}
+	}
+	return reviewResult,nil,totalPage;
 }
 
 func GetSimilar(c *fiber.Ctx) error{
