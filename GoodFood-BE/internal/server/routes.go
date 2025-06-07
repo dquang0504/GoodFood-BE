@@ -76,6 +76,8 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	customerReviewGroup := s.App.Group("api/review",auth.AuthMiddleware)
 	customerReviewGroup.Get("",handlers.GetReviewData)
 	customerReviewGroup.Post("/create",handlers.HandleSubmitReview)
+	customerReviewGroup.Get("/detail",handlers.GetReviewDetail)
+	customerReviewGroup.Put("/update",handlers.HandleUpdateReview)
 	//Routes related to change password
 	changePasswordGroup := s.App.Group("api/change-password",auth.AuthMiddleware)
 	changePasswordGroup.Post("/submit",handlers.ChangePasswordSubmit)
