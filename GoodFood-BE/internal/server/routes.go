@@ -28,7 +28,10 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	s.App.Get("/", handlers.HelloWorldHandler)
 	s.App.Get("/health", handlers.HealthHandler(dbService))
 
-	s.App.Get("/websocket", websocket.New(s.websocketHandler))
+	//websockets and real time chat
+	websocketGroup := s.App.Group("/ws")
+	websocketGroup.Get("/user/:accountID",websocket.New(handlers.HandleUserWebsocket))
+	websocketGroup.Get("/admin/:adminID",websocket.New(handlers.HandleAdminWebSocket))
 
 	//Routes related to accounts
 	userGroup := s.App.Group("/api/user")
