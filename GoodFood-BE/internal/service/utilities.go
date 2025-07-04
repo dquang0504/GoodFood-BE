@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/genai"
 	"gopkg.in/gomail.v2"
 )
 
@@ -72,4 +73,104 @@ func SendResetPasswordEmail(toEmail string, resetLink string) error{
 	dialer := gomail.NewDialer("smtp.gmail.com",587,"williamdang0404@gmail.com","yhjd uzhk hhvp zfiq")
 	err := dialer.DialAndSend(mailer);
 	return err;
+}
+
+func FunctionDeclaration() []*genai.FunctionDeclaration {
+	// ✅ Function declaration
+	functions := []*genai.FunctionDeclaration{
+		{
+			Name: "get_order_status",
+			Description: "Retrieve the status of an order in GoodFood24h",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"order_id": {Type: genai.TypeString, Description: "The ID of the order"},
+				},
+				Required: []string{"order_id"},
+			},
+		},
+		{
+			Name: "get_top_product",
+			Description: "Retrieve the information of the most sold product in GoodFood24h",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+			},
+		},
+	}
+	return functions
+}
+
+func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.GenerateContentResponse, error){
+	client, err := genai.NewClient(c.Context(), &genai.ClientConfig{
+		Project:  "322745191572",
+		Location: "us-central1",
+		Backend:  genai.BackendVertexAI,
+	})
+	if err != nil {
+		return nil,SendError(c, 500, "Failed to create client: "+err.Error())
+	}
+
+	// ✅ Generation config with function calling
+	config := &genai.GenerateContentConfig{
+		MaxOutputTokens: 1024,
+		Temperature:     Float32Ptr(0.7),
+		TopP:            Float32Ptr(0.9),
+	}
+
+	if withFunction {
+		config.Tools = []*genai.Tool{
+			{FunctionDeclarations: FunctionDeclaration()},
+		}
+	}
+
+	// ✅ Prompt
+	contents := []*genai.Content{
+		{
+			Role: "user",
+			Parts: []*genai.Part{
+				{Text: "You are a concise assistant specialized in answering questions about GoodFood24h - an e-commerce website for ordering food online. " +
+					"Answer this question or call a function if needed: " + prompt},
+			},
+		},
+	}
+
+	// ✅ Generate content
+	res, err := client.Models.GenerateContent(c.Context(),
+		"projects/322745191572/locations/us-central1/endpoints/5530821664155107328",
+		contents,
+		config,
+	)
+	if err != nil {
+		return nil,SendError(c, 500, "Failed to generate content: "+err.Error())
+	}
+
+	return res,nil
+}
+
+func GiveStructuredAnswer(question string,prompt string, c *fiber.Ctx) (string, error) {
+	instructionNdPrompt := fmt.Sprintf(
+		"The question is about %s in GoodFood24h. Write a concise, natural answer with key details: product name, total quantity sold (exclude product id): %s.",
+		question,prompt,
+	)
+	res, err := CallVertexAI(instructionNdPrompt, c, false)
+	if err != nil {
+		return "", err
+	}
+
+	// 🟢 DEBUG: In toàn bộ response
+	fmt.Printf("Full response: %+v\n", len(res.Candidates))
+
+	result := ""
+	for _, candidate := range res.Candidates {
+		for _, part := range candidate.Content.Parts {
+			if part.Text != "" {
+				result += part.Text
+			}
+		}
+	}
+	return result, nil
+}
+
+func Float32Ptr(f float32) *float32 {
+	return &f
 }

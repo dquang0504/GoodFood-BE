@@ -6,14 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
-	"google.golang.org/genai"
 )
 
 type PromptRequest struct {
@@ -30,73 +28,10 @@ func CallVertexAI(c *fiber.Ctx) error {
 		return service.SendError(c, 400, "Prompt cannot be empty")
 	}
 
-	ctx := context.Background()
-
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		Project:  "322745191572",
-		Location: "us-central1",
-		Backend:  genai.BackendVertexAI,
-	})
+	res,err := service.CallVertexAI(body.Prompt,c,true);
 	if err != nil {
-		return service.SendError(c, 500, "Failed to create client: "+err.Error())
+		return service.SendError(c, 500, err.Error())
 	}
-
-	// ✅ Function declaration
-	functions := []*genai.FunctionDeclaration{
-		{
-			Name: "get_order_status",
-			Description: "Retrieve the status of an order in GoodFood24h",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"order_id": {Type: genai.TypeString, Description: "The ID of the order"},
-				},
-				Required: []string{"order_id"},
-			},
-		},
-		{
-			Name: "get_top_product",
-			Description: "Retrieve the information of the most sold product in GoodFood24h",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-			},
-		},
-	}
-
-	// ✅ Generation config with function calling
-	config := &genai.GenerateContentConfig{
-		MaxOutputTokens: 1024,
-		Temperature:     float32Ptr(0.7),
-		TopP:            float32Ptr(0.9),
-		Tools: []*genai.Tool{
-			{FunctionDeclarations: functions},
-		},
-	}
-
-	// ✅ Prompt
-	contents := []*genai.Content{
-		{
-			Role: "user",
-			Parts: []*genai.Part{
-				{Text: "You are a concise assistant specialized in answering questions about GoodFood24h - an e-commerce website for ordering food online. " +
-					"Answer this question or call a function if needed: " + body.Prompt},
-			},
-		},
-	}
-
-	// ✅ Generate content
-	res, err := client.Models.GenerateContent(ctx,
-		"projects/322745191572/locations/us-central1/endpoints/5530821664155107328",
-		contents,
-		config,
-	)
-	if err != nil {
-		return service.SendError(c, 500, "Failed to generate content: "+err.Error())
-	}
-
-	// ✅ Debug full response
-	debug, _ := json.MarshalIndent(res, "", "  ")
-	log.Printf("Full response:\n%s\n", debug)
 
 	// ✅ If the model called a function
 	if len(res.Candidates) > 0 && res.Candidates[0].Content != nil {
@@ -117,14 +52,6 @@ func CallVertexAI(c *fiber.Ctx) error {
 					default:
 						break;
 				}
-				// return c.JSON(fiber.Map{
-				// 	"status":  "FunctionCall",
-				// 	"message": "Model decided to call a function",
-				// 	"function": fiber.Map{
-				// 		"name":   call.Name,
-				// 		"args":   call.Args,
-				// 	},
-				// })
 			}
 		}
 	}
@@ -146,10 +73,7 @@ func CallVertexAI(c *fiber.Ctx) error {
 	})
 }
 
-func float32Ptr(f float32) *float32 {
-	return &f
-}
-
+//fix cho get_order_status chỉ trả về những hóa đơn của ng đang đăng nhập và suy nghĩ thêm các function mới
 func get_order_status (c *fiber.Ctx, orderID int) error{
 	order, err := models.Invoices(qm.Where("\"invoiceID\" = ?",orderID)).One(context.Background(),boil.GetContextDB())
 	if err != nil{
@@ -174,6 +98,7 @@ type BestSellingProductResponse struct {
 	ProductID         int    `boil:"productID" json:"productID"`
 	ProductName       string `boil:"productName" json:"productName"`
 	TotalQuantitySold int    `boil:"total_quantity_sold" json:"totalQuantitySold"`
+	ProductImage string `boil:"product_img" json:"productImage"`
 }
 
 func get_top_product (c *fiber.Ctx) error{
@@ -181,22 +106,31 @@ func get_top_product (c *fiber.Ctx) error{
 	err := queries.Raw(`
 		SELECT p."productID",
 		p."productName",
-		SUM(id."quantity") AS total_quantity_sold FROM
+		SUM(id."quantity") AS total_quantity_sold,
+		p."coverImage" AS product_img FROM
 		invoice_detail id INNER JOIN product p ON
 		id."productID" = p."productID"
-		GROUP BY p."productID",p."productName"
+		GROUP BY p."productID",p."productName",p."coverImage"
 		ORDER BY total_quantity_sold DESC
 		LIMIT 1
 	`).Bind(c.Context(),boil.GetContextDB(),&response);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-	
-	result := fmt.Sprintf("The best selling product is: %s",response.ProductName)
+	jsonBytes, err := json.Marshal(response);
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	res, err := service.GiveStructuredAnswer("get_top_product",string(jsonBytes),c);
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
 
 	return c.JSON(fiber.Map{
 		"status":  "Success",
-		"data":    result,
+		"data":    res,
+		"image": response.ProductImage,
+		"productID": response.ProductID,
 		"message": "Fine-tuned model response OK",
 	})
 }
