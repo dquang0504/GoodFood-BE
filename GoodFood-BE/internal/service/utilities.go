@@ -96,6 +96,43 @@ func FunctionDeclaration() []*genai.FunctionDeclaration {
 				Type: genai.TypeObject,
 			},
 		},
+		{
+			Name: "place_order",
+			Description: "Proceed to place an order of the given product along with its quantity",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"products":{
+						Type: genai.TypeArray,
+						Description: "The name of the product",
+						Items: &genai.Schema{
+							Type: genai.TypeObject,
+							Properties: map[string]*genai.Schema{
+								"product_name":{
+									Type: genai.TypeString,
+									Description: "Name of the product",
+								},
+								"quantity":{
+									Type: genai.TypeInteger,
+									Description: "Number of units to order",
+								},
+							},
+							Required: []string{"product_name","quantity"},
+						},
+					},
+					"address_id":{
+						Type: genai.TypeInteger,
+						Description: "ID of the delivery address",
+					},
+					"payment_method": {
+						Type: genai.TypeString,
+						Description: "Payment method: 'COD' means pay when receiving (true), 'ONLINE' means pay online (false).",
+						Enum: []string{"COD", "ONLINE"},
+					},
+				},
+				Required: []string{"products","address_id","payment_method"},
+			},
+		},
 	}
 	return functions
 }
@@ -159,6 +196,27 @@ func GiveStructuredAnswer(question string,prompt string, c *fiber.Ctx) (string, 
 
 	// 🟢 DEBUG: In toàn bộ response
 	fmt.Printf("Full response: %+v\n", len(res.Candidates))
+
+	result := ""
+	for _, candidate := range res.Candidates {
+		for _, part := range candidate.Content.Parts {
+			if part.Text != "" {
+				result += part.Text
+			}
+		}
+	}
+	return result, nil
+}
+
+func GiveAnswerForUnreachableData(question string,c *fiber.Ctx) (string, error) {
+	instructionNdPrompt := fmt.Sprintf(
+		"The question is about %s in GoodFood24h. Write a short answer explaining to the user why the data is restricted from them and try to make it easy to understand, don't use any coding terminology.",
+		question,
+	)
+	res, err := CallVertexAI(instructionNdPrompt, c, false)
+	if err != nil {
+		return "", err
+	}
 
 	result := ""
 	for _, candidate := range res.Candidates {

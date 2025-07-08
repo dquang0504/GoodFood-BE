@@ -22,7 +22,10 @@ type InvoiceList struct{
 
 func GetOrderHistory(c *fiber.Ctx) error{
 	tab := c.Query("tab","Đã đặt hàng");
-
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID!")
+	}
 	invoiceList := []InvoiceList{}
 	err := queries.Raw(`
 		SELECT invoice_detail."invoiceID" as invoice_id, COALESCE(COUNT(invoice_detail."productID"),0) as total_products,
@@ -31,9 +34,9 @@ func GetOrderHistory(c *fiber.Ctx) error{
 		FROM invoice INNER JOIN invoice_detail
 		ON invoice."invoiceID" = invoice_detail."invoiceID"
 		INNER JOIN invoice_status ON invoice."invoiceStatusID" = invoice_status."invoiceStatusID"
-		WHERE invoice_status."statusName" = $1
+		WHERE invoice_status."statusName" = $1 AND invoice."accountID" = $2
 		GROUP BY invoice_detail."invoiceID", invoice."receiveAddress", invoice.status, invoice."totalPrice", invoice."cancelReason"
-	`,tab).Bind(c.Context(),boil.GetContextDB(),&invoiceList);
+	`,tab,accountID).Bind(c.Context(),boil.GetContextDB(),&invoiceList);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}

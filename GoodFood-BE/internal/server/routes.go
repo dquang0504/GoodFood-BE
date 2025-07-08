@@ -34,7 +34,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	websocketGroup.Get("/admin/:adminID",websocket.New(handlers.HandleAdminWebSocket))
 
 	//Routes related to Chat Bot
-	chatbotGroup := s.App.Group("/api/chatbot")
+	chatbotGroup := s.App.Group("/api/chatbot",auth.OptionalAuthMiddleware)
 	chatbotGroup.Post("/call",handlers.CallVertexAI)
 	//Routes related to accounts
 	userGroup := s.App.Group("/api/user")
