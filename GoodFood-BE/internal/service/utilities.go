@@ -120,17 +120,13 @@ func FunctionDeclaration() []*genai.FunctionDeclaration {
 							Required: []string{"product_name","quantity"},
 						},
 					},
-					"address_id":{
-						Type: genai.TypeInteger,
-						Description: "ID of the delivery address",
-					},
 					"payment_method": {
 						Type: genai.TypeString,
 						Description: "Payment method: 'COD' means pay when receiving (true), 'ONLINE' means pay online (false).",
 						Enum: []string{"COD", "ONLINE"},
 					},
 				},
-				Required: []string{"products","address_id","payment_method"},
+				Required: []string{"products","payment_method"},
 			},
 		},
 	}

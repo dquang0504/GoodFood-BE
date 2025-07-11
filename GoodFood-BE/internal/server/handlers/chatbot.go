@@ -65,26 +65,12 @@ func CallVertexAI(c *fiber.Ctx) error {
 							}
 							parsedProducts = append(parsedProducts, m)
 						}
-						//Parse address_id
-						var addressID int
-						//checking if the model did return the address_id
-						addrAny, ok := call.Args["address_id"];
-						if ok{
-							addrFloat, ok := addrAny.(float64)
-							if !ok {
-								return service.SendError(c, 400, "Invalid address_id.")
-							}
-							addressID = int(addrFloat)
-						}else{
-							addressID = 0;
-						}
-						
 						// Parse payment_method
 						paymentMethod, ok := call.Args["payment_method"].(string)
 						if !ok {
 							return service.SendError(c, 400, "Invalid payment_method.")
 						}
-						return place_order(c,parsedProducts,addressID,paymentMethod);
+						return place_order(c,parsedProducts,paymentMethod);
 					default:
 						break;
 				}
@@ -187,25 +173,17 @@ func get_top_product (c *fiber.Ctx) error{
 	})
 }
 
-func place_order(c *fiber.Ctx, products []map[string]interface{}, addressID int, paymentMethod string) error{
-	var address *models.Address
-	carts := []models.CartDetail{}
+func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod string) error{
+	carts := []CartDetailResponse{}
 	user, err := models.Accounts(qm.Where("username = ?",auth.GetAuthenticatedUser(c))).One(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
 	//address fetching logic
-	if addressID == 0{
-		address, err = models.Addresses(qm.Where("\"accountID\" = ? AND status = true",user.AccountID)).One(c.Context(),boil.GetContextDB());
-		if err != nil{
-			return service.SendError(c,500,err.Error());
-		}
-	}else{
-		address, err = models.Addresses(qm.Where("\"addressID\" = ? AND \"accountID\" = ?",addressID,user.AccountID)).One(c.Context(),boil.GetContextDB());
-		if err != nil{
-			return service.SendError(c,500,err.Error());
-		}
+	address, err := models.Addresses(qm.Where("\"accountID\" = ? AND status = true",user.AccountID)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
 	}
 
 	//products fetching logic
@@ -218,7 +196,14 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, addressID int,
 		}
 
 		//inserting product to cart
-		carts = append(carts, models.CartDetail{Quantity: quantity,ProductID: product.ProductID,AccountID: user.AccountID})
+		carts = append(carts, CartDetailResponse{
+			CartDetail: models.CartDetail{
+				Quantity: quantity,
+				ProductID: product.ProductID,
+				AccountID: user.AccountID,
+			},
+			Product: product,
+		})
 	}
 
 	return c.JSON(fiber.Map{
@@ -226,6 +211,7 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, addressID int,
 		"data":    "Your order is ready. Click here!",
 		"carts": carts,
 		"address": address,
+		"paymentMethod": paymentMethod,
 		"message": "Fine-tuned model response OK",
 	})
 }
