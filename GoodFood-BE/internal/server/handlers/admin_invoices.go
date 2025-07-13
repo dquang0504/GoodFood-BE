@@ -79,13 +79,13 @@ func GetAdminInvoice(c *fiber.Ctx) error{
 	// handling search and sort filter and filling queryMods
 	if search != "" {
 		switch sort {
-		case "Mã hóa đơn":
+		case "Invoice ID":
 			queryMods = append(queryMods, qm.Where("CAST(\"invoiceID\" AS TEXT) ILIKE ?", "%"+search+"%"))
 			queryModsTotal = append(queryModsTotal, qm.Where("CAST(\"invoiceID\" AS TEXT) ILIKE ?", "%"+search+"%"))
-		case "Tên khách hàng":
+		case "Customer name":
 			queryMods = append(queryMods, qm.Where("\"receiveName\" ILIKE ?", "%"+search+"%"))
 			queryModsTotal = append(queryModsTotal, qm.Where("\"receiveName\" ILIKE ?", "%"+search+"%"))
-		case "Trạng thái":
+		case "Invoice status":
 			status, err := models.InvoiceStatuses(qm.Where("\"statusName\" ILIKE ?", "%"+search+"%")).One(c.Context(), boil.GetContextDB())
 			if err != nil {
 				return service.SendError(c, 500, err.Error())
@@ -95,7 +95,7 @@ func GetAdminInvoice(c *fiber.Ctx) error{
 		default:
 			// fallback
 		}
-	} else if sort == "Ngày thanh toán" && !ngayFrom.IsZero() && !ngayTo.IsZero() && ngayFrom.Before(ngayTo) {
+	} else if sort == "Payment date" && !ngayFrom.IsZero() && !ngayTo.IsZero() && ngayFrom.Before(ngayTo) {
 		queryMods = append(queryMods, qm.Where("DATE(\"paymentDate\") BETWEEN ? AND ?", ngayFrom, ngayTo))
 		queryModsTotal = append(queryModsTotal, qm.Where("DATE(\"paymentDate\") BETWEEN ? AND ?", ngayFrom, ngayTo))
 	}

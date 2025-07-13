@@ -70,11 +70,15 @@ func GetProductsByPage(c *fiber.Ctx) error{
 	//Lấy về các tham số
 	typeName := c.Query("type","");
 	search := c.Query("search","");
+	minPrice := c.QueryInt("minPrice",0);
+	maxPrice := c.QueryInt("maxPrice",0);
+	orderBy := c.Query("orderBy","ASC");
 	//Tính offset
 	offset := (page-1)*6;
 
 	//Tạo query mod
 	queryMods := []qm.QueryMod{
+		qm.Where("price BETWEEN ? AND ?",minPrice,maxPrice),
 		qm.Load(models.ProductRels.ProductTypeIDProductType),
 	}
 
@@ -84,7 +88,7 @@ func GetProductsByPage(c *fiber.Ctx) error{
 		if err != nil {
 			return service.SendError(c, 500, "Product type not found")
 		}
-		queryMods = append(queryMods, qm.Where( "\"productTypeID\" = ?",productType.ProductTypeID))
+		queryMods = append(queryMods, qm.Where( "\"productTypeID\" = ?",productType.ProductTypeID),)
 		totalProduct,err = models.Products(
 			queryMods...
 		).Count(c.Context(),boil.GetContextDB());
@@ -108,12 +112,12 @@ func GetProductsByPage(c *fiber.Ctx) error{
 		queryMods...
 	).Count(c.Context(),boil.GetContextDB());
 	if err != nil {
-		return service.SendError(c, 500, "Total product not found")
+		return service.SendError(c, 500, err.Error())
 	}
 	totalPage := int(math.Ceil(float64(totalProduct) / float64(6)))
 
 	//Creating redis key after page,type,search
-	redisKey := fmt.Sprintf("products:page%d:type=%s:search=%s",page,typeName,search)
+	redisKey := fmt.Sprintf("products:page%d:type=%s:search=%s:minPrice=%d:maxPrice=%d:orderByPrice=%s",page,typeName,search,minPrice,maxPrice,orderBy)
 	//Checking if redis key exists
 	cachedProducts,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
 	fmt.Println("Cached data:", cachedProducts)
@@ -122,7 +126,7 @@ func GetProductsByPage(c *fiber.Ctx) error{
 	}
 
 	//Thêm vào offset và limit để phân trang
-	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset));
+	queryMods = append(queryMods,qm.OrderBy("price "+orderBy), qm.Limit(6), qm.Offset(offset));
 	products, err := models.Products(queryMods...).All(c.Context(), boil.GetContextDB())
 	
 	
