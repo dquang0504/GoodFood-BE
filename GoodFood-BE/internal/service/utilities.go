@@ -1,9 +1,14 @@
 package service
 
 import (
+	redisdatabase "GoodFood-BE/internal/redis-database"
+	"context"
 	"fmt"
+	"log"
 
+	firebase "firebase.google.com/go"
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/api/option"
 	"google.golang.org/genai"
 	"gopkg.in/gomail.v2"
 )
@@ -73,6 +78,54 @@ func SendResetPasswordEmail(toEmail string, resetLink string) error{
 	dialer := gomail.NewDialer("smtp.gmail.com",587,"williamdang0404@gmail.com","yhjd uzhk hhvp zfiq")
 	err := dialer.DialAndSend(mailer);
 	return err;
+}
+
+func ClearProductCache(productID int) error{
+	redisSetKey := fmt.Sprintf("product:detail:%d:keys",productID)
+
+	//Fetch all saved cached keys
+	keys, err := redisdatabase.Client.SMembers(redisdatabase.Ctx,redisSetKey).Result()
+	if err != nil{
+		return fmt.Errorf("failed to get cache keys: %v", err)
+	}
+	//deleting key one by one
+	if len(keys) > 0{
+		err = redisdatabase.Client.Del(redisdatabase.Ctx,keys...).Err()
+		if err != nil{
+			return fmt.Errorf("failed to delete cached keys: %v",err)
+		}
+	}
+	return nil
+}
+
+func InitializeFirebaseApp(ctx context.Context) *firebase.App{
+	//firebase app initialization
+	app, err := firebase.NewApp(ctx,nil,option.WithCredentialsFile("./config/fivefood-datn-8a1cf-firebase-adminsdk-n0vxi-9ad735160d.json"))
+	if err != nil{
+		log.Fatalf("error initializing app: %v\n", err)
+	}
+	return app
+}
+
+func DeleteFirebaseImage(imgPath string, ctx context.Context) error{
+	app := InitializeFirebaseApp(ctx)
+
+	storageClient, err := app.Storage(ctx)
+	if err != nil{
+		return err
+	}
+
+	bucket, err := storageClient.DefaultBucket()
+	if err != nil{
+		return err
+	}
+
+	obj := bucket.Object(imgPath)
+	if err := obj.Delete(ctx); err != nil{
+		return err
+	}
+
+	return nil
 }
 
 func FunctionDeclaration() []*genai.FunctionDeclaration {

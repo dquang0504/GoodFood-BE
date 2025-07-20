@@ -4,8 +4,11 @@ import (
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
+	"encoding/json"
 	"fmt"
+	"io"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
@@ -59,17 +62,100 @@ type ReviewSubmitResponse struct{
 	models.Review
 	ReviewImages []models.ReviewImage `json:"reviewImages"`
 }
+type NSFWScores struct{
+	Unsafe float64 `json:"unsafe"`
+	Porn float64 `json:"porn"`
+	Sexy float64 `json:"sexy"`
+}
+type ImageDetectionResult struct{
+	Image string `json:"image"`
+	NSFW bool `json:"nsfw"`
+	NSFWScores NSFWScores `json:"nsfw_scores"`
+	Violent bool `json:"violent"`
+	ViolentLabel string `json:"violent_label"`
+}
+type ReviewContentDetection struct{
+	Label string `json:"label"`
+	Score float64 `json:"score"`
+	Images []ImageDetectionResult `json:"images"`
+}
 func HandleSubmitReview(c *fiber.Ctx) error{
-	body := ReviewSubmitResponse{}
-	err := c.BodyParser(&body);
-	if err != nil{
-		return service.SendError(c,400,err.Error());
+	//resty
+	client := resty.New();
+
+	// 1. Parse phần "review" từ multipart
+	reviewJson := c.FormValue("review")
+	if reviewJson == "" {
+		return service.SendError(c, 400, "Missing review data")
 	}
+
+	var body ReviewSubmitResponse
+	if err := json.Unmarshal([]byte(reviewJson), &body); err != nil {
+		return service.SendError(c, 400, "Invalid review JSON: "+err.Error())
+	}
+
+	// 2. Lấy tất cả file "images"
+	form, err := c.MultipartForm()
+	if err != nil {
+		return service.SendError(c, 400, "Error parsing multipart: "+err.Error())
+	}
+	files := form.File["images"]
+
+	// 3. Đọc binary các file ảnh để gửi cho gRPC Flask
+	var imageBinaries = make(map[string][]byte)
+	for _, file := range files {
+		f, err := file.Open()
+		if err != nil {
+			return service.SendError(c, 500, "Failed to open image: "+err.Error())
+		}
+		defer f.Close()
+
+		buf, err := io.ReadAll(f)
+		if err != nil {
+			return service.SendError(c, 500, "Failed to read image: "+err.Error())
+		}
+		imageBinaries[file.Filename] = buf
+	}
+
+	// 4. Gửi ảnh binary & comment tới Flask để kiểm duyệt
+	payload := map[string]interface{}{
+		"review": body.Comment,
+		"images": imageBinaries,
+	}
+
+	var result ReviewContentDetection
+	_, err = client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload).
+		SetResult(&result).
+		Post("http://192.168.240.1:5000/reviewLabel")
+
+	if err != nil {
+		return service.SendError(c, 500, "Failed to call gRPC Flask: "+err.Error())
+	}
+
+	if result.Label == "toxic" {
+		return service.SendError(c, 400, "⚠️ Hate Speech Detected: Please edit your comment.")
+	}
+
+	for _, img := range result.Images {
+		fmt.Println(img);
+		if img.NSFW {
+			return service.SendError(c, 400, "⚠️ NSFW Content Detected. Please remove or replace the image: "+img.Image)
+		}
+	}
+
 	//insert new review
 	err = body.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
+	//also clearing product cache after insertion
+	err = service.ClearProductCache(body.ProductID)
+	if err != nil{
+		fmt.Println("Error clearing product cache: ",err)
+	}
+
 	//insert its corresponding review images
 	var reviewImages = body.ReviewImages
 	for i := range reviewImages{
@@ -84,6 +170,7 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 	resp := fiber.Map{
 		"status": "Success",
 		"data": body,
+		"result": result,
 		"message": "Successfully submitted product review!",
 	}
 	return c.JSON(resp);

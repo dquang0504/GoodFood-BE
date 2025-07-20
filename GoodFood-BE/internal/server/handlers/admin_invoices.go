@@ -175,15 +175,15 @@ func GetAdminInvoiceDetail(c *fiber.Ctx) error{
 	queryMods := []qm.QueryMod{}
 
 	switch(fetchStatus.StatusName){
-		case "Đã đặt hàng":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Đã Hủy","Đã xác nhận"))
-		case "Đã xác nhận":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Đang xử lý"))
-		case "Đang xử lý":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Đang vận chuyển"))
-		case "Đang vận chuyển":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Giao thành công"))
-		case "Giao thành công":
+		case "Order Placed":
+			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Cancelled","Order Confirmed"))
+		case "Order Confirmed":
+			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Order Processing"))
+		case "Order Processing":
+			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Shipping"))
+		case "Shipping":
+			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Delivered"))
+		case "Delivered":
 			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ?",fetchStatus.StatusName))
 		default:
 			//do nothing in fallback
@@ -251,6 +251,11 @@ func UpdateInvoice(c *fiber.Ctx) error{
 
 	if getInvoice.InvoiceStatusID != invoiceStatus.InvoiceStatusID && invoiceStatus.InvoiceStatusID != 6{
 		getInvoice.InvoiceStatusID += 1
+	}
+
+	if invoiceStatus.InvoiceStatusID == 5{
+		getInvoice.InvoiceStatusID = 5
+		getInvoice.Status = true;
 	}
 
 	if invoiceStatus.InvoiceStatusID == 6{

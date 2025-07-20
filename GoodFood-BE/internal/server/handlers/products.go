@@ -372,6 +372,12 @@ func GetDetail(c *fiber.Ctx) error{
 	//Saving redis cache for 30 mins
 	jsonData, _ := json.Marshal(resp)
 	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData,30*time.Minute)
+	//add this key to the set tracking all cache keys of this product
+	redisSetKey := fmt.Sprintf("product:detail:%d:keys",id)
+	err = redisdatabase.Client.SAdd(redisdatabase.Ctx,redisSetKey,redisKey).Err()
+	if err != nil{
+		fmt.Println("Error adding redis key to set: ", err)
+	}
 
 	return c.JSON(resp);
 }
