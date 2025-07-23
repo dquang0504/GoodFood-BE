@@ -310,3 +310,34 @@ func RefreshToken(c *fiber.Ctx) error{
 	}
 	return c.JSON(response)
 }
+
+type ContactResponse struct{
+	Fullname string `json:"name"`
+	Email string `json:"fromEmail"`
+	Message string `json:"content"`
+}
+func HandleContact(c *fiber.Ctx) error{
+	body := ContactResponse{}
+	if err := c.BodyParser(&body); err != nil{
+		return service.SendError(c,400,err.Error())
+	}
+
+	//creating email sending task
+	task, err := jobs.NewCustomerSentContactTask(body.Fullname,body.Email,body.Message);
+	if err != nil{
+		return service.SendError(c,500, err.Error())
+	}
+	//enqueuing
+	_,err = asynqClient.Enqueue(task)
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+
+	response := fiber.Map{
+		"status": "Success",
+		"data": "",
+		"message": "Successfully sent a message. We will contact you back shortly!",
+	}
+
+	return c.JSON(response);
+}

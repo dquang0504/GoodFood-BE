@@ -138,11 +138,22 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 		return service.SendError(c, 400, "⚠️ Hate Speech Detected: Please edit your comment.")
 	}
 
+	//NSFW and violence detection alerts
 	for _, img := range result.Images {
 		fmt.Println(img);
 		if img.NSFW {
 			return service.SendError(c, 400, "⚠️ NSFW Content Detected. Please remove or replace the image: "+img.Image)
 		}
+
+		if img.Violent{
+			return service.SendError(c, 400, "⚠️ Violence Detected. Please remove or replace the image: "+img.Image)
+		}
+	}
+
+	//insert images into firebase storage
+	uploadedURLs, err := service.UploadFirebaseImages(imageBinaries,c.Context());
+	if err != nil{
+		return service.SendError(c,500, err.Error())
 	}
 
 	//insert new review
@@ -158,10 +169,15 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 
 	//insert its corresponding review images
 	var reviewImages = body.ReviewImages
-	for i := range reviewImages{
-		reviewImages[i].ReviewID = body.ReviewID
-		fmt.Println(reviewImages[i]);
-		err = reviewImages[i].Insert(c.Context(),boil.GetContextDB(),boil.Infer());
+	for _, url := range uploadedURLs{
+		reviewImages = append(reviewImages, models.ReviewImage{
+			ReviewID: body.ReviewID,
+			ImageName: url,
+		})
+	}
+
+	for _, img := range reviewImages{
+		err = img.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 		if err != nil{
 			return service.SendError(c,500,err.Error());
 		}

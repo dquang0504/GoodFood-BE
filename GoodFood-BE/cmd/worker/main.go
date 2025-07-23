@@ -17,6 +17,7 @@ func main(){
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeResetPasswordEmail, jobs.HandleResetPasswordEmailTask)
+	mux.HandleFunc(jobs.TypeSendContactMessage,jobs.HandleContactCustomerSent)
 	if err := srv.Run(mux); err != nil{
 		log.Fatalf("Could not run asynq server: %v",err);
 	}

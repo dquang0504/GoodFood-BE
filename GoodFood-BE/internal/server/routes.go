@@ -37,7 +37,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	chatbotGroup := s.App.Group("/api/chatbot",auth.OptionalAuthMiddleware)
 	chatbotGroup.Post("/call",handlers.CallVertexAI)
 	//Routes related to accounts
-	userGroup := s.App.Group("/api/user")
+	userGroup := s.App.Group("/api/user",auth.OptionalAuthMiddleware)
 	userGroup.Post("/register",handlers.HandleRegister)
 	userGroup.Get("/login",handlers.HandleLogin)
 	userGroup.Get("/refresh-token",handlers.RefreshToken)
@@ -45,6 +45,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	userGroup.Post("/forgot-password/sendOTP",handlers.HandleForgotPassword)
 	userGroup.Get("/forgot-password/validate",handlers.ValidateResetToken)
 	userGroup.Post("/forgot-password/reset",handlers.HandleResetPassword)
+	userGroup.Post("/contact",handlers.HandleContact)
 	//Routes related to products
 	productGroup := s.App.Group("/api/products")
 	productGroup.Get("/getFeaturings",handlers.GetFour)

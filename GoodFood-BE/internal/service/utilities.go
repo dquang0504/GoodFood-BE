@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 
+	"cloud.google.com/go/storage"
 	firebase "firebase.google.com/go"
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/api/option"
@@ -80,6 +82,34 @@ func SendResetPasswordEmail(toEmail string, resetLink string) error{
 	return err;
 }
 
+func SendMessageCustomerSent(fromEmail string, message string) error {
+	mailer := gomail.NewMessage()
+	mailer.SetHeader("From", "williamdang0404@gmail.com")
+	mailer.SetHeader("To", "williamdang0404@gmail.com")
+	mailer.SetHeader("Subject", "📩 Contact Message from Customer")
+
+	emailBody := fmt.Sprintf(`
+		<div style="font-family: Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px;">
+			<h2 style="color: #4CAF50;">📨 Bạn nhận được tin nhắn từ khách hàng!</h2>
+			<p><strong>Địa chỉ email khách hàng:</strong> <a href="mailto:%s">%s</a></p>
+
+			<hr style="margin: 20px 0;">
+
+			<p style="white-space: pre-line; line-height: 1.6;">%s</p>
+
+			<hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+			<p style="font-size: 13px; color: #888;">Email này được gửi từ hệ thống website GoodFood24h.</p>
+		</div>
+	`, fromEmail, fromEmail, message)
+
+	mailer.SetBody("text/html", emailBody)
+	
+	dialer := gomail.NewDialer("smtp.gmail.com", 587, "williamdang0404@gmail.com", "yhjd uzhk hhvp zfiq")
+
+	err := dialer.DialAndSend(mailer)
+	return err
+}
+
 func ClearProductCache(productID int) error{
 	redisSetKey := fmt.Sprintf("product:detail:%d:keys",productID)
 
@@ -100,7 +130,10 @@ func ClearProductCache(productID int) error{
 
 func InitializeFirebaseApp(ctx context.Context) *firebase.App{
 	//firebase app initialization
-	app, err := firebase.NewApp(ctx,nil,option.WithCredentialsFile("./config/fivefood-datn-8a1cf-firebase-adminsdk-n0vxi-9ad735160d.json"))
+	config := &firebase.Config{
+		StorageBucket: "fivefood-datn-8a1cf.appspot.com",
+	}
+	app, err := firebase.NewApp(ctx,config,option.WithCredentialsFile("./config/fivefood-datn-8a1cf-firebase-adminsdk-n0vxi-9ad735160d.json"))
 	if err != nil{
 		log.Fatalf("error initializing app: %v\n", err)
 	}
@@ -126,6 +159,50 @@ func DeleteFirebaseImage(imgPath string, ctx context.Context) error{
 	}
 
 	return nil
+}
+
+func UploadFirebaseImages(images map[string][]byte, ctx context.Context) (map[string]string, error) {
+	app := InitializeFirebaseApp(ctx)
+
+	storageClient, err := app.Storage(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	bucket, err := storageClient.DefaultBucket()
+	if err != nil {
+		return nil, err
+	}
+
+	// Kết quả trả về: map tên ảnh -> URL công khai
+	uploadedURLs := make(map[string]string)
+
+	for imageName, imageData := range images {
+		obj := bucket.Object("AnhDanhGia/" + imageName) // optional: prefix folder "reviews/"
+		writer := obj.NewWriter(ctx)
+		writer.ContentType = "image/jpeg"
+
+		if _, err := writer.Write(imageData); err != nil {
+			writer.Close()
+			return nil, fmt.Errorf("failed to upload %s: %w", imageName, err)
+		}
+
+		if err := writer.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close writer for %s: %w", imageName, err)
+		}
+		// Cho phép truy cập public
+		err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader)
+		if err != nil{
+			return nil, fmt.Errorf("failed to set files public %s: %w", imageName, err)
+		}
+
+		objectPath := "AnhDanhGia/" + imageName
+		encodedPath := url.QueryEscape(objectPath)
+		publicURL := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o/%s?alt=media", bucket.BucketName(), encodedPath)
+		uploadedURLs[imageName] = publicURL
+	}
+
+	return uploadedURLs, nil
 }
 
 func FunctionDeclaration() []*genai.FunctionDeclaration {
