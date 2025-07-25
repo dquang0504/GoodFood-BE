@@ -20,6 +20,8 @@ func TestUpsert(t *testing.T) {
 
 	t.Run("InvoiceStatuses", testInvoiceStatusesUpsert)
 
+	t.Run("OauthAccounts", testOauthAccountsUpsert)
+
 	t.Run("Products", testProductsUpsert)
 
 	t.Run("ProductImages", testProductImagesUpsert)

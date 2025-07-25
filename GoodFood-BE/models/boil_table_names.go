@@ -11,6 +11,7 @@ var TableNames = struct {
 	Invoice       string
 	InvoiceDetail string
 	InvoiceStatus string
+	OauthAccount  string
 	Product       string
 	ProductImages string
 	ProductType   string
@@ -28,6 +29,7 @@ var TableNames = struct {
 	Invoice:       "invoice",
 	InvoiceDetail: "invoice_detail",
 	InvoiceStatus: "invoice_status",
+	OauthAccount:  "oauth_account",
 	Product:       "product",
 	ProductImages: "product_images",
 	ProductType:   "product_type",

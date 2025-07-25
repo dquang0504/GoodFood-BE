@@ -16,6 +16,7 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/api/idtoken"
 )
 
 func HandleRegister(c *fiber.Ctx) error{
@@ -93,6 +94,79 @@ func HandleLogin(c *fiber.Ctx) error{
 			"user": user,
 			"accessToken": accessToken,
 		},
+		"message": "Successfully fetched login details!",
+	}
+	return c.JSON(response);
+}
+
+type OAuthLoginStruct struct{
+	AccessToken string `json:"accessToken"`
+}
+
+func HandleLoginGoogle(c *fiber.Ctx) error{
+	body := OAuthLoginStruct{}
+	if err := c.BodyParser(&body); err != nil{
+		return service.SendError(c,400,err.Error())
+	}
+
+	idToken := body.AccessToken
+	audience := ""
+
+	//authorize token with google
+	payload, err := idtoken.Validate(c.Context(),idToken,audience);
+	if err != nil{
+		return service.SendError(c,500,err.Error())
+	}
+
+	//parsing payload
+	sub := fmt.Sprintf("%v",payload.Claims["sub"]) //unique google id
+	name := fmt.Sprintf("%v",payload.Claims["name"])
+	email := fmt.Sprintf("%v",payload.Claims["email"])
+	picture := fmt.Sprintf("%v", payload.Claims["picture"])
+
+	//checking if the user exists
+	existing, err := models.OauthAccounts(qm.Where("\"providerUserID\" = ?",sub)).One(c.Context(),boil.GetContextDB());
+	if err == nil{
+		return c.JSON(fiber.Map{
+			"status": "Success",
+			"data": existing,
+			"message": "Login successfully!",
+		})
+	}
+
+	//if not exist
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(sub),bcrypt.DefaultCost)
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	//insert into account table
+	newUser := models.Account{
+		Username: sub,
+		Password: string(hashedPass),
+		PhoneNumber: null.String{},
+		Email: email,
+		Gender: true,
+		FullName: name,
+		Avatar: null.StringFrom(picture),
+		Status: true,
+		Role: false,
+	}
+	if err := newUser.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	//insert into oauth_account table
+	oauthUser := models.OauthAccount{
+		AccountID: newUser.AccountID,
+		Provider: "google",
+		ProviderUserID: sub,
+	}
+	if err := oauthUser.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	response := fiber.Map{
+		"status": "Success",
+		"data": body.AccessToken,
 		"message": "Successfully fetched login details!",
 	}
 	return c.JSON(response);

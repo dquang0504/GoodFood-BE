@@ -234,29 +234,32 @@ var AccountWhere = struct {
 
 // AccountRels is where relationship names are stored.
 var AccountRels = struct {
-	AccountIDAddresses    string
-	AccountIDCartDetails  string
-	AccountIDInvoices     string
-	AccountIDReplies      string
-	AccountIDReviews      string
-	AccountIDTransactions string
+	AccountIDAddresses     string
+	AccountIDCartDetails   string
+	AccountIDInvoices      string
+	AccountIDOauthAccounts string
+	AccountIDReplies       string
+	AccountIDReviews       string
+	AccountIDTransactions  string
 }{
-	AccountIDAddresses:    "AccountIDAddresses",
-	AccountIDCartDetails:  "AccountIDCartDetails",
-	AccountIDInvoices:     "AccountIDInvoices",
-	AccountIDReplies:      "AccountIDReplies",
-	AccountIDReviews:      "AccountIDReviews",
-	AccountIDTransactions: "AccountIDTransactions",
+	AccountIDAddresses:     "AccountIDAddresses",
+	AccountIDCartDetails:   "AccountIDCartDetails",
+	AccountIDInvoices:      "AccountIDInvoices",
+	AccountIDOauthAccounts: "AccountIDOauthAccounts",
+	AccountIDReplies:       "AccountIDReplies",
+	AccountIDReviews:       "AccountIDReviews",
+	AccountIDTransactions:  "AccountIDTransactions",
 }
 
 // accountR is where relationships are stored.
 type accountR struct {
-	AccountIDAddresses    AddressSlice     `boil:"AccountIDAddresses" json:"AccountIDAddresses" toml:"AccountIDAddresses" yaml:"AccountIDAddresses"`
-	AccountIDCartDetails  CartDetailSlice  `boil:"AccountIDCartDetails" json:"AccountIDCartDetails" toml:"AccountIDCartDetails" yaml:"AccountIDCartDetails"`
-	AccountIDInvoices     InvoiceSlice     `boil:"AccountIDInvoices" json:"AccountIDInvoices" toml:"AccountIDInvoices" yaml:"AccountIDInvoices"`
-	AccountIDReplies      ReplySlice       `boil:"AccountIDReplies" json:"AccountIDReplies" toml:"AccountIDReplies" yaml:"AccountIDReplies"`
-	AccountIDReviews      ReviewSlice      `boil:"AccountIDReviews" json:"AccountIDReviews" toml:"AccountIDReviews" yaml:"AccountIDReviews"`
-	AccountIDTransactions TransactionSlice `boil:"AccountIDTransactions" json:"AccountIDTransactions" toml:"AccountIDTransactions" yaml:"AccountIDTransactions"`
+	AccountIDAddresses     AddressSlice      `boil:"AccountIDAddresses" json:"AccountIDAddresses" toml:"AccountIDAddresses" yaml:"AccountIDAddresses"`
+	AccountIDCartDetails   CartDetailSlice   `boil:"AccountIDCartDetails" json:"AccountIDCartDetails" toml:"AccountIDCartDetails" yaml:"AccountIDCartDetails"`
+	AccountIDInvoices      InvoiceSlice      `boil:"AccountIDInvoices" json:"AccountIDInvoices" toml:"AccountIDInvoices" yaml:"AccountIDInvoices"`
+	AccountIDOauthAccounts OauthAccountSlice `boil:"AccountIDOauthAccounts" json:"AccountIDOauthAccounts" toml:"AccountIDOauthAccounts" yaml:"AccountIDOauthAccounts"`
+	AccountIDReplies       ReplySlice        `boil:"AccountIDReplies" json:"AccountIDReplies" toml:"AccountIDReplies" yaml:"AccountIDReplies"`
+	AccountIDReviews       ReviewSlice       `boil:"AccountIDReviews" json:"AccountIDReviews" toml:"AccountIDReviews" yaml:"AccountIDReviews"`
+	AccountIDTransactions  TransactionSlice  `boil:"AccountIDTransactions" json:"AccountIDTransactions" toml:"AccountIDTransactions" yaml:"AccountIDTransactions"`
 }
 
 // NewStruct creates a new relationship struct
@@ -283,6 +286,13 @@ func (r *accountR) GetAccountIDInvoices() InvoiceSlice {
 		return nil
 	}
 	return r.AccountIDInvoices
+}
+
+func (r *accountR) GetAccountIDOauthAccounts() OauthAccountSlice {
+	if r == nil {
+		return nil
+	}
+	return r.AccountIDOauthAccounts
 }
 
 func (r *accountR) GetAccountIDReplies() ReplySlice {
@@ -664,6 +674,20 @@ func (o *Account) AccountIDInvoices(mods ...qm.QueryMod) invoiceQuery {
 	return Invoices(queryMods...)
 }
 
+// AccountIDOauthAccounts retrieves all the oauth_account's OauthAccounts with an executor via accountID column.
+func (o *Account) AccountIDOauthAccounts(mods ...qm.QueryMod) oauthAccountQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"oauth_account\".\"accountID\"=?", o.AccountID),
+	)
+
+	return OauthAccounts(queryMods...)
+}
+
 // AccountIDReplies retrieves all the reply's Replies with an executor via accountID column.
 func (o *Account) AccountIDReplies(mods ...qm.QueryMod) replyQuery {
 	var queryMods []qm.QueryMod
@@ -1035,6 +1059,119 @@ func (accountL) LoadAccountIDInvoices(ctx context.Context, e boil.ContextExecuto
 				local.R.AccountIDInvoices = append(local.R.AccountIDInvoices, foreign)
 				if foreign.R == nil {
 					foreign.R = &invoiceR{}
+				}
+				foreign.R.AccountIDAccount = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadAccountIDOauthAccounts allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (accountL) LoadAccountIDOauthAccounts(ctx context.Context, e boil.ContextExecutor, singular bool, maybeAccount interface{}, mods queries.Applicator) error {
+	var slice []*Account
+	var object *Account
+
+	if singular {
+		var ok bool
+		object, ok = maybeAccount.(*Account)
+		if !ok {
+			object = new(Account)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeAccount)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeAccount))
+			}
+		}
+	} else {
+		s, ok := maybeAccount.(*[]*Account)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeAccount)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeAccount))
+			}
+		}
+	}
+
+	args := make(map[interface{}]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &accountR{}
+		}
+		args[object.AccountID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &accountR{}
+			}
+			args[obj.AccountID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]interface{}, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`oauth_account`),
+		qm.WhereIn(`oauth_account.accountID in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load oauth_account")
+	}
+
+	var resultSlice []*OauthAccount
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice oauth_account")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on oauth_account")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for oauth_account")
+	}
+
+	if len(oauthAccountAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.AccountIDOauthAccounts = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &oauthAccountR{}
+			}
+			foreign.R.AccountIDAccount = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.AccountID == foreign.AccountID {
+				local.R.AccountIDOauthAccounts = append(local.R.AccountIDOauthAccounts, foreign)
+				if foreign.R == nil {
+					foreign.R = &oauthAccountR{}
 				}
 				foreign.R.AccountIDAccount = local
 				break
@@ -1534,6 +1671,59 @@ func (o *Account) AddAccountIDInvoices(ctx context.Context, exec boil.ContextExe
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &invoiceR{
+				AccountIDAccount: o,
+			}
+		} else {
+			rel.R.AccountIDAccount = o
+		}
+	}
+	return nil
+}
+
+// AddAccountIDOauthAccounts adds the given related objects to the existing relationships
+// of the account, optionally inserting them as new records.
+// Appends related to o.R.AccountIDOauthAccounts.
+// Sets related.R.AccountIDAccount appropriately.
+func (o *Account) AddAccountIDOauthAccounts(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*OauthAccount) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.AccountID = o.AccountID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"oauth_account\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"accountID"}),
+				strmangle.WhereClause("\"", "\"", 2, oauthAccountPrimaryKeyColumns),
+			)
+			values := []interface{}{o.AccountID, rel.OauthID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.AccountID = o.AccountID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &accountR{
+			AccountIDOauthAccounts: related,
+		}
+	} else {
+		o.R.AccountIDOauthAccounts = append(o.R.AccountIDOauthAccounts, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &oauthAccountR{
 				AccountIDAccount: o,
 			}
 		} else {

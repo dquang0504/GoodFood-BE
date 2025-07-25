@@ -24,20 +24,33 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	// "golang.org/x/text/number"
 )
+type GetFourStruct struct{
+	models.Product
+	ProductType *models.ProductType
+}
 
 func GetFour(c *fiber.Ctx) error {
     // Tạo context từ Fiber
 	ctx := c.Context()
 
 	// Truy vấn danh sách sản phẩm
-	products, err := models.Products(qm.Limit(4)).All(ctx, boil.GetContextDB())
+	products, err := models.Products(qm.Limit(4), qm.Load(models.ProductRels.ProductTypeIDProductType)).All(ctx, boil.GetContextDB())
 	if err != nil {
 		return service.SendError(c,500,"Failed to fetch products")
 	}
 
+	response := make([]GetFourStruct,len(products));
+
+	for i,product := range products{
+		response[i] = GetFourStruct{
+			Product: *product,
+			ProductType: product.R.ProductTypeIDProductType,
+		}
+	}
+
 	resp := fiber.Map{
 		"status": "Success",
-		"data": products,
+		"data": response,
 		"message": "Successfully fetched featuring items",
 	}
 

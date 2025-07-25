@@ -40,6 +40,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	userGroup := s.App.Group("/api/user",auth.OptionalAuthMiddleware)
 	userGroup.Post("/register",handlers.HandleRegister)
 	userGroup.Get("/login",handlers.HandleLogin)
+	userGroup.Post("/login/google",handlers.HandleLoginGoogle)
 	userGroup.Get("/refresh-token",handlers.RefreshToken)
 	userGroup.Put("/update",handlers.HandleUpdateAccount)
 	userGroup.Post("/forgot-password/sendOTP",handlers.HandleForgotPassword)
