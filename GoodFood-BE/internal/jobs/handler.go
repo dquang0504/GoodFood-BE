@@ -1,7 +1,7 @@
 package jobs
 
 import (
-	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,7 +15,7 @@ func HandleResetPasswordEmailTask(ctx context.Context, t *asynq.Task) error{
 		return fmt.Errorf("failed to unmarshal payload: %v",err);
 	}
 
-	err := service.SendResetPasswordEmail(payload.ToEmail,payload.ResetLink)
+	err := utils.SendResetPasswordEmail(payload.ToEmail,payload.ResetLink)
 	if err != nil{
 		return fmt.Errorf("failed to send email: %v",err);
 	}
@@ -28,7 +28,7 @@ func HandleContactCustomerSent(ctx context.Context, t *asynq.Task) error{
 		return fmt.Errorf("failed to unmarshal payload: %v",err);
 	}
 
-	err := service.SendMessageCustomerSent(payload.FromEmail,payload.Message)
+	err := utils.SendMessageCustomerSent(payload.FromEmail,payload.Message)
 	if err != nil{
 		return fmt.Errorf("failed to send email: %v",err);
 	}

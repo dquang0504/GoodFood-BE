@@ -162,7 +162,7 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 			}
 
 			//provide user with a token
-			accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+			accessToken, err := utils.CreateTokenForUser(c,existingAccount.Username);
 			if err != nil{
 				return service.SendError(c,500,err.Error());
 			}
@@ -211,7 +211,120 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	}
 
 	//provide user with a token
-	accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+	accessToken, err := utils.CreateTokenForUser(c,newUser.Username);
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	response := fiber.Map{
+		"status": "Success",
+		"data": fiber.Map{
+			"user": newUser,
+			"accessToken": accessToken,
+		},
+		"message": "Successfully fetched login details!",
+	}
+	return c.JSON(response);
+}
+
+func HandleLoginFacebook(c *fiber.Ctx) error{
+	body := OAuthLoginStruct{}
+	if err := c.BodyParser(&body); err != nil{
+		return service.SendError(c,400,err.Error())
+	}
+
+	idToken := body.AccessToken
+	fbUser, err := utils.GetFacebookUserInfo(idToken);
+	if err != nil{
+		return service.SendError(c,500, err.Error());
+	}
+
+	//checking if the oauth user exists
+	existingOAuth, err := models.OauthAccounts(qm.Where("\"providerUserID\" = ?",fbUser.ID),qm.Load(models.OauthAccountRels.AccountIDAccount)).One(c.Context(),boil.GetContextDB());
+	if err == nil{
+
+		//provide user with a token
+		accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+		if err != nil{
+			return service.SendError(c,500,err.Error());
+		}
+
+		return c.JSON(fiber.Map{
+			"status": "Success",
+			"data": fiber.Map{
+				"user": existingOAuth.R.AccountIDAccount,
+				"accessToken": accessToken,
+			},
+			"message": "Login successfully!",
+		})
+	}
+
+	//checking if there is already an account with the same email
+	existingAccount, err := models.Accounts(qm.Where("email = ?",fbUser.Email)).One(c.Context(),boil.GetContextDB());
+	if err == nil{
+		//if exists, bind OAuth account to this account
+		if existingAccount.EmailVerified{
+			oauth := models.OauthAccount{
+				AccountID: existingAccount.AccountID,
+				Provider: "facebook",
+				ProviderUserID: fbUser.ID,
+			}
+			if err := oauth.Insert(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
+				return service.SendError(c, 500, "Failed to link OAuth: "+err.Error())
+			}
+
+			//provide user with a token
+			accessToken, err := utils.CreateTokenForUser(c,existingAccount.Username);
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
+
+			return c.JSON(fiber.Map{
+				"status": "Success",
+				"data": fiber.Map{
+					"user": existingAccount,
+					"accessToken": accessToken,
+				},
+				"message": "OAuth linked & login successfully!",
+			})
+		}else{
+			return service.SendError(c,403,"This email is already associated with an unverified account. Please verify your email or contact support.")
+		}
+	}
+
+	//if oauth account does not exist
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(fbUser.ID),bcrypt.DefaultCost)
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	//insert into account table
+	newUser := models.Account{
+		Username: fbUser.ID,
+		Password: string(hashedPass),
+		PhoneNumber: null.String{},
+		Email: fbUser.Email,
+		Gender: true,
+		FullName: fbUser.Name,
+		Avatar: null.StringFrom(fbUser.Picture.Data.URL),
+		Status: true,
+		Role: false,
+	}
+	fmt.Println(newUser.Avatar);
+	if err := newUser.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	//insert into oauth_account table
+	oauthUser := models.OauthAccount{
+		AccountID: newUser.AccountID,
+		Provider: "facebook",
+		ProviderUserID: fbUser.ID,
+	}
+	if err := oauthUser.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
+	//provide user with a token
+	accessToken, err := utils.CreateTokenForUser(c,newUser.Username);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}

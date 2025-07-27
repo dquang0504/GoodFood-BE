@@ -2,11 +2,13 @@ package utils
 
 import (
 	"GoodFood-BE/internal/auth"
-	"GoodFood-BE/internal/service"
 	redisdatabase "GoodFood-BE/internal/redis-database"
+	"GoodFood-BE/internal/service"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 
 	"cloud.google.com/go/storage"
@@ -196,6 +198,36 @@ func CreateTokenForUser(ctx *fiber.Ctx,username string) (accessToken string, err
 
 	return accessToken,nil;
 }
+
+type FacebookUserStruct struct{
+	ID string `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Picture struct{
+		Data struct{
+			URL string `json:"url"`
+		} `json:"data"`
+	}`json:"picture"`
+}
+
+func GetFacebookUserInfo(accessToken string)(*FacebookUserStruct,error){
+	resp, err := http.Get("https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=" + url.QueryEscape(accessToken))
+	if err != nil{
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200{
+		return nil,fmt.Errorf("Facebook API eror: %v",resp.Status)
+	}
+
+	var fbUser FacebookUserStruct
+	if err := json.NewDecoder(resp.Body).Decode(&fbUser); err != nil{
+		return nil, err
+	}
+
+	return &fbUser, nil
+}	
 
 func FunctionDeclaration() []*genai.FunctionDeclaration {
 	// ✅ Function declaration
