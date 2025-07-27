@@ -3,6 +3,7 @@ package handlers
 import (
 	"GoodFood-BE/internal/auth"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"context"
 	"encoding/json"
@@ -29,7 +30,7 @@ func CallVertexAI(c *fiber.Ctx) error {
 		return service.SendError(c, 400, "Prompt cannot be empty")
 	}
 
-	res,err := service.CallVertexAI(body.Prompt,c,true);
+	res,err := utils.CallVertexAI(body.Prompt,c,true);
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
@@ -105,7 +106,7 @@ func get_order_status (c *fiber.Ctx, orderID int) error{
 	order, err := models.Invoices(qm.Where("\"invoiceID\" = ? AND \"accountID\" = ?",orderID,account.AccountID)).One(c.Context(),boil.GetContextDB())
 	if err != nil{
 		if err.Error() == "sql: no rows in result set"{
-			resp, err := service.GiveAnswerForUnreachableData("user asked for the status of an order, but the order does not exist in the database or it's not THEIR order",c)
+			resp, err := utils.GiveAnswerForUnreachableData("user asked for the status of an order, but the order does not exist in the database or it's not THEIR order",c)
 			if err != nil{
 				return service.SendError(c,500,err.Error());
 			}
@@ -159,7 +160,7 @@ func get_top_product (c *fiber.Ctx) error{
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-	res, err := service.GiveStructuredAnswer("get_top_product",string(jsonBytes),c);
+	res, err := utils.GiveStructuredAnswer("get_top_product",string(jsonBytes),c);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}

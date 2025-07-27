@@ -2,6 +2,7 @@ package handlers
 
 import (
 	redisdatabase "GoodFood-BE/internal/redis-database"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
 	"encoding/json"
@@ -151,7 +152,7 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 	}
 
 	//insert images into firebase storage
-	uploadedURLs, err := service.UploadFirebaseImages(imageBinaries,c.Context());
+	uploadedURLs, err := utils.UploadFirebaseImages(imageBinaries,c.Context());
 	if err != nil{
 		return service.SendError(c,500, err.Error())
 	}
@@ -162,7 +163,7 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 	//also clearing product cache after insertion
-	err = service.ClearProductCache(body.ProductID)
+	err = utils.ClearProductCache(body.ProductID)
 	if err != nil{
 		fmt.Println("Error clearing product cache: ",err)
 	}

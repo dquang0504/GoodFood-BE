@@ -24,67 +24,72 @@ import (
 
 // Account is an object representing the database table.
 type Account struct {
-	AccountID   int         `boil:"accountID" json:"accountID" toml:"accountID" yaml:"accountID"`
-	Username    string      `boil:"username" json:"username" toml:"username" yaml:"username"`
-	Password    string      `boil:"password" json:"password" toml:"password" yaml:"password"`
-	PhoneNumber null.String `boil:"phoneNumber" json:"phoneNumber,omitempty" toml:"phoneNumber" yaml:"phoneNumber,omitempty"`
-	Email       string      `boil:"email" json:"email" toml:"email" yaml:"email"`
-	FullName    string      `boil:"fullName" json:"fullName" toml:"fullName" yaml:"fullName"`
-	Gender      bool        `boil:"gender" json:"gender" toml:"gender" yaml:"gender"`
-	Avatar      null.String `boil:"avatar" json:"avatar,omitempty" toml:"avatar" yaml:"avatar,omitempty"`
-	Status      bool        `boil:"status" json:"status" toml:"status" yaml:"status"`
-	Role        bool        `boil:"role" json:"role" toml:"role" yaml:"role"`
+	AccountID     int         `boil:"accountID" json:"accountID" toml:"accountID" yaml:"accountID"`
+	Username      string      `boil:"username" json:"username" toml:"username" yaml:"username"`
+	Password      string      `boil:"password" json:"password" toml:"password" yaml:"password"`
+	PhoneNumber   null.String `boil:"phoneNumber" json:"phoneNumber,omitempty" toml:"phoneNumber" yaml:"phoneNumber,omitempty"`
+	Email         string      `boil:"email" json:"email" toml:"email" yaml:"email"`
+	FullName      string      `boil:"fullName" json:"fullName" toml:"fullName" yaml:"fullName"`
+	Gender        bool        `boil:"gender" json:"gender" toml:"gender" yaml:"gender"`
+	Avatar        null.String `boil:"avatar" json:"avatar,omitempty" toml:"avatar" yaml:"avatar,omitempty"`
+	Status        bool        `boil:"status" json:"status" toml:"status" yaml:"status"`
+	Role          bool        `boil:"role" json:"role" toml:"role" yaml:"role"`
+	EmailVerified bool        `boil:"emailVerified" json:"emailVerified" toml:"emailVerified" yaml:"emailVerified"`
 
 	R *accountR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L accountL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var AccountColumns = struct {
-	AccountID   string
-	Username    string
-	Password    string
-	PhoneNumber string
-	Email       string
-	FullName    string
-	Gender      string
-	Avatar      string
-	Status      string
-	Role        string
+	AccountID     string
+	Username      string
+	Password      string
+	PhoneNumber   string
+	Email         string
+	FullName      string
+	Gender        string
+	Avatar        string
+	Status        string
+	Role          string
+	EmailVerified string
 }{
-	AccountID:   "accountID",
-	Username:    "username",
-	Password:    "password",
-	PhoneNumber: "phoneNumber",
-	Email:       "email",
-	FullName:    "fullName",
-	Gender:      "gender",
-	Avatar:      "avatar",
-	Status:      "status",
-	Role:        "role",
+	AccountID:     "accountID",
+	Username:      "username",
+	Password:      "password",
+	PhoneNumber:   "phoneNumber",
+	Email:         "email",
+	FullName:      "fullName",
+	Gender:        "gender",
+	Avatar:        "avatar",
+	Status:        "status",
+	Role:          "role",
+	EmailVerified: "emailVerified",
 }
 
 var AccountTableColumns = struct {
-	AccountID   string
-	Username    string
-	Password    string
-	PhoneNumber string
-	Email       string
-	FullName    string
-	Gender      string
-	Avatar      string
-	Status      string
-	Role        string
+	AccountID     string
+	Username      string
+	Password      string
+	PhoneNumber   string
+	Email         string
+	FullName      string
+	Gender        string
+	Avatar        string
+	Status        string
+	Role          string
+	EmailVerified string
 }{
-	AccountID:   "account.accountID",
-	Username:    "account.username",
-	Password:    "account.password",
-	PhoneNumber: "account.phoneNumber",
-	Email:       "account.email",
-	FullName:    "account.fullName",
-	Gender:      "account.gender",
-	Avatar:      "account.avatar",
-	Status:      "account.status",
-	Role:        "account.role",
+	AccountID:     "account.accountID",
+	Username:      "account.username",
+	Password:      "account.password",
+	PhoneNumber:   "account.phoneNumber",
+	Email:         "account.email",
+	FullName:      "account.fullName",
+	Gender:        "account.gender",
+	Avatar:        "account.avatar",
+	Status:        "account.status",
+	Role:          "account.role",
+	EmailVerified: "account.emailVerified",
 }
 
 // Generated where
@@ -209,27 +214,29 @@ func (w whereHelperbool) GT(x bool) qm.QueryMod  { return qmhelper.Where(w.field
 func (w whereHelperbool) GTE(x bool) qm.QueryMod { return qmhelper.Where(w.field, qmhelper.GTE, x) }
 
 var AccountWhere = struct {
-	AccountID   whereHelperint
-	Username    whereHelperstring
-	Password    whereHelperstring
-	PhoneNumber whereHelpernull_String
-	Email       whereHelperstring
-	FullName    whereHelperstring
-	Gender      whereHelperbool
-	Avatar      whereHelpernull_String
-	Status      whereHelperbool
-	Role        whereHelperbool
+	AccountID     whereHelperint
+	Username      whereHelperstring
+	Password      whereHelperstring
+	PhoneNumber   whereHelpernull_String
+	Email         whereHelperstring
+	FullName      whereHelperstring
+	Gender        whereHelperbool
+	Avatar        whereHelpernull_String
+	Status        whereHelperbool
+	Role          whereHelperbool
+	EmailVerified whereHelperbool
 }{
-	AccountID:   whereHelperint{field: "\"account\".\"accountID\""},
-	Username:    whereHelperstring{field: "\"account\".\"username\""},
-	Password:    whereHelperstring{field: "\"account\".\"password\""},
-	PhoneNumber: whereHelpernull_String{field: "\"account\".\"phoneNumber\""},
-	Email:       whereHelperstring{field: "\"account\".\"email\""},
-	FullName:    whereHelperstring{field: "\"account\".\"fullName\""},
-	Gender:      whereHelperbool{field: "\"account\".\"gender\""},
-	Avatar:      whereHelpernull_String{field: "\"account\".\"avatar\""},
-	Status:      whereHelperbool{field: "\"account\".\"status\""},
-	Role:        whereHelperbool{field: "\"account\".\"role\""},
+	AccountID:     whereHelperint{field: "\"account\".\"accountID\""},
+	Username:      whereHelperstring{field: "\"account\".\"username\""},
+	Password:      whereHelperstring{field: "\"account\".\"password\""},
+	PhoneNumber:   whereHelpernull_String{field: "\"account\".\"phoneNumber\""},
+	Email:         whereHelperstring{field: "\"account\".\"email\""},
+	FullName:      whereHelperstring{field: "\"account\".\"fullName\""},
+	Gender:        whereHelperbool{field: "\"account\".\"gender\""},
+	Avatar:        whereHelpernull_String{field: "\"account\".\"avatar\""},
+	Status:        whereHelperbool{field: "\"account\".\"status\""},
+	Role:          whereHelperbool{field: "\"account\".\"role\""},
+	EmailVerified: whereHelperbool{field: "\"account\".\"emailVerified\""},
 }
 
 // AccountRels is where relationship names are stored.
@@ -320,9 +327,9 @@ func (r *accountR) GetAccountIDTransactions() TransactionSlice {
 type accountL struct{}
 
 var (
-	accountAllColumns            = []string{"accountID", "username", "password", "phoneNumber", "email", "fullName", "gender", "avatar", "status", "role"}
+	accountAllColumns            = []string{"accountID", "username", "password", "phoneNumber", "email", "fullName", "gender", "avatar", "status", "role", "emailVerified"}
 	accountColumnsWithoutDefault = []string{"username", "password", "email", "fullName", "gender", "status", "role"}
-	accountColumnsWithDefault    = []string{"accountID", "phoneNumber", "avatar"}
+	accountColumnsWithDefault    = []string{"accountID", "phoneNumber", "avatar", "emailVerified"}
 	accountPrimaryKeyColumns     = []string{"accountID"}
 	accountGeneratedColumns      = []string{}
 )

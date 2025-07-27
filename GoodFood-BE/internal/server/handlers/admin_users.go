@@ -119,12 +119,14 @@ type UserError struct{
 func AdminUserCreate(c *fiber.Ctx) error{
 	hasPassword := false;
 	hasUsername := true;
+	hasEmail := false;
+	hasPhone := false;
 	var user models.Account
 	if err := c.BodyParser(&user); err != nil{
 		return service.SendError(c,400,"Invalid body!");
 	}
 
-	if valid, errObj := validationUser(&user,hasPassword,hasUsername); !valid{
+	if valid, errObj := validationUser(&user,hasPassword,hasUsername,hasEmail,hasPhone); !valid{
 		return service.SendErrorStruct(c,400,errObj);
 	}
 
@@ -177,20 +179,22 @@ func AdminUserUpdate(c *fiber.Ctx) error{
 
 }
 
-func validationUser(user *models.Account, hasPassword bool,hasUsername bool) (bool,UserError){
+func validationUser(user *models.Account, hasPassword bool,hasUsername bool, hasEmail bool,hasPhone bool) (bool,UserError){
 	var error UserError
 	isValid := true
 	if user.FullName == ""{
 		error.ErrName = "Please input your full name!"
 		isValid = false;
 	}
-	if user.Email == ""{
-		error.ErrEmail = "Please input your email!"
-		isValid = false;
-	}else if res, err := models.Accounts(qm.Where("email = ?",user.Email)).Exists(context.Background(),boil.GetContextDB()); err == nil{
-		if res{
-			error.ErrEmail = "Email already exists!"
+	if(hasEmail){
+		if user.Email == ""{
+			error.ErrEmail = "Please input your email!"
 			isValid = false;
+		}else if res, err := models.Accounts(qm.Where("email = ?",user.Email)).Exists(context.Background(),boil.GetContextDB()); err == nil{
+			if res{
+				error.ErrEmail = "Email already exists!"
+				isValid = false;
+			}
 		}
 	}
 	if (hasUsername){
@@ -204,13 +208,15 @@ func validationUser(user *models.Account, hasPassword bool,hasUsername bool) (bo
 			}
 		}
 	}
-	if user.PhoneNumber.String == ""{
-		error.ErrPhone = "Please input your phone number!"
-		isValid = false;
-	}else if res, err := models.Accounts(qm.Where("\"phoneNumber\" = ?",user.PhoneNumber.String)).Exists(context.Background(),boil.GetContextDB()); err == nil{
-		if res{
-			error.ErrPhone = "Phone number already exists!"
+	if(hasPhone){
+		if user.PhoneNumber.String == ""{
+			error.ErrPhone = "Please input your phone number!"
 			isValid = false;
+		}else if res, err := models.Accounts(qm.Where("\"phoneNumber\" = ?",user.PhoneNumber.String)).Exists(context.Background(),boil.GetContextDB()); err == nil{
+			if res{
+				error.ErrPhone = "Phone number already exists!"
+				isValid = false;
+			}
 		}
 	}
 	if(hasPassword){

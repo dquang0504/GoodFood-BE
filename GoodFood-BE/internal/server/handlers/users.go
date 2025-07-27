@@ -5,6 +5,7 @@ import (
 	"GoodFood-BE/internal/jobs"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"fmt"
 	"time"
@@ -22,12 +23,14 @@ import (
 func HandleRegister(c *fiber.Ctx) error{
 	hasPassword := true;
 	hasUsername := true
+	hasEmail := true
+	hasPhone := true;
 	var user models.Account
 	if err := c.BodyParser(&user); err != nil{
 		return service.SendError(c,400,err.Error());
 	}
 
-	if valid, errObj := validationUser(&user,hasPassword,hasUsername); !valid{
+	if valid, errObj := validationUser(&user,hasPassword,hasUsername,hasEmail,hasPhone); !valid{
 		return service.SendErrorStruct(c,500,errObj)
 	}
 
@@ -110,7 +113,7 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	}
 
 	idToken := body.AccessToken
-	audience := ""
+	audience := "331299660257-2iif19euj1k218243c0q77q3ruesjtp3.apps.googleusercontent.com"
 
 	//authorize token with google
 	payload, err := idtoken.Validate(c.Context(),idToken,audience);
@@ -124,17 +127,60 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	email := fmt.Sprintf("%v",payload.Claims["email"])
 	picture := fmt.Sprintf("%v", payload.Claims["picture"])
 
-	//checking if the user exists
-	existing, err := models.OauthAccounts(qm.Where("\"providerUserID\" = ?",sub)).One(c.Context(),boil.GetContextDB());
+	//checking if the oauth user exists
+	existingOAuth, err := models.OauthAccounts(qm.Where("\"providerUserID\" = ?",sub),qm.Load(models.OauthAccountRels.AccountIDAccount)).One(c.Context(),boil.GetContextDB());
 	if err == nil{
+
+		//provide user with a token
+		accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+		if err != nil{
+			return service.SendError(c,500,err.Error());
+		}
+
 		return c.JSON(fiber.Map{
 			"status": "Success",
-			"data": existing,
+			"data": fiber.Map{
+				"user": existingOAuth.R.AccountIDAccount,
+				"accessToken": accessToken,
+			},
 			"message": "Login successfully!",
 		})
 	}
 
-	//if not exist
+	//checking if there is already an account with the same email
+	existingAccount, err := models.Accounts(qm.Where("email = ?",email)).One(c.Context(),boil.GetContextDB());
+	if err == nil{
+		//if exists, bind OAuth account to this account
+		if existingAccount.EmailVerified{
+			oauth := models.OauthAccount{
+				AccountID: existingAccount.AccountID,
+				Provider: "google",
+				ProviderUserID: sub,
+			}
+			if err := oauth.Insert(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
+				return service.SendError(c, 500, "Failed to link OAuth: "+err.Error())
+			}
+
+			//provide user with a token
+			accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
+
+			return c.JSON(fiber.Map{
+				"status": "Success",
+				"data": fiber.Map{
+					"user": existingAccount,
+					"accessToken": accessToken,
+				},
+				"message": "OAuth linked & login successfully!",
+			})
+		}else{
+			return service.SendError(c,403,"This email is already associated with an unverified account. Please verify your email or contact support.")
+		}
+	}
+
+	//if oauth account does not exist
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(sub),bcrypt.DefaultCost)
 	if err != nil{
 		return service.SendError(c,500,err.Error());
@@ -164,9 +210,18 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 
+	//provide user with a token
+	accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+
 	response := fiber.Map{
 		"status": "Success",
-		"data": body.AccessToken,
+		"data": fiber.Map{
+			"user": newUser,
+			"accessToken": accessToken,
+		},
 		"message": "Successfully fetched login details!",
 	}
 	return c.JSON(response);
@@ -175,6 +230,8 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 func HandleUpdateAccount(c *fiber.Ctx) error{
 	hasPassword := false;
 	hasUsername := false;
+	hasEmail := false;
+	hasPhone := false;
 	var body models.Account
 	accountID := c.QueryInt("accountID",0);
 	if accountID == 0{
@@ -189,15 +246,27 @@ func HandleUpdateAccount(c *fiber.Ctx) error{
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-	if ok, errObj := validationUser(&body,hasPassword,hasUsername); !ok{
+
+	//check logic for hasEmail and hasPhone
+	if body.Email != account.Email{
+		hasEmail = true;
+	}
+	if body.PhoneNumber.String != account.PhoneNumber.String{
+		hasPhone = true;
+	}
+
+	if ok, errObj := validationUser(&body,hasPassword,hasUsername,hasEmail,hasPhone); !ok{
 		return service.SendErrorStruct(c,400,errObj);
 	}
 
 	//start updating account info
 	account.FullName = body.FullName
-	account.PhoneNumber = null.StringFrom(body.PhoneNumber.String)
-	account.Email = body.Email
-	fmt.Println("Body: ",body.Avatar.String)
+	if account.PhoneNumber != null.StringFrom(body.PhoneNumber.String){
+		account.PhoneNumber = null.StringFrom(body.PhoneNumber.String)
+	}
+	if account.Email != body.Email{
+		account.Email = body.Email
+	}
 	//start here
 	if body.Avatar.String != ""{
 		account.Avatar = null.StringFrom(body.Avatar.String)
