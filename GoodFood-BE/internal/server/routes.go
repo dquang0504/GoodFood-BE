@@ -76,7 +76,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	//Routes related to invoice
 	invoiceGroup := s.App.Group("api/invoice",auth.AuthMiddleware)
 	invoiceGroup.Post("/pay",handlers.InvoicePay)
-	invoiceGroup.Post("/pay/online",handlers.InvoiceOnlinePay)
+	invoiceGroup.Post("/pay/vnpay",handlers.InvoicePayVNPAY)
 	//Routes related to order history
 	orderHistoryGroup := s.App.Group("api/order-history",auth.AuthMiddleware)
 	orderHistoryGroup.Get("",handlers.GetOrderHistory)

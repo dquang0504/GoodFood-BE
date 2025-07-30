@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -52,7 +53,7 @@ func InvoicePay(c *fiber.Ctx) error{
 
 }
 
-func InvoiceOnlinePay(c *fiber.Ctx) error{
+func InvoicePayVNPAY(c *fiber.Ctx) error{
 
 	body := models.Invoice{}
 	if err := c.BodyParser(&body); err != nil{
@@ -61,7 +62,7 @@ func InvoiceOnlinePay(c *fiber.Ctx) error{
 
 	//amount * 100 (vnpay requirement)
 	amount := int64(body.TotalPrice) * 100
-	orderId := strconv.Itoa(body.InvoiceID + 1)
+	orderId := strconv.Itoa(body.InvoiceID + 18)
 
 	//query params
 	vnpParams := map[string]string{
@@ -75,7 +76,7 @@ func InvoiceOnlinePay(c *fiber.Ctx) error{
 		"vnp_OrderInfo": fmt.Sprintf("Paying for invoice: %d", body.InvoiceID),
 		"vnp_Locale":    "vn",
 		"vnp_OrderType": "other",
-		"vnp_ReturnUrl": "https://fivefood.shop/vnpay_return",
+		"vnp_ReturnUrl": "http://localhost:5173/home/payment",
 		"vnp_IpAddr":    "127.0.0.1",
 	}
 
@@ -92,30 +93,31 @@ func InvoiceOnlinePay(c *fiber.Ctx) error{
 	}
 	sort.Strings(keys)
 
-	//Build query string
-	var query url.Values = url.Values{}
-	var rawData string
-	for i,k := range keys{
-		v :=vnpParams[k]
-		if v != ""{
-			query.Add(k,v)
-			rawData += k + "=" + v
-			if i < len(keys) - 1{
-				rawData += "&"
+	//Build rawData and query string
+	var rawData strings.Builder
+	var query strings.Builder
+	for i, k := range keys {
+		v := vnpParams[k]
+		if v != "" {
+			if i > 0 {
+				rawData.WriteString("&")
+				query.WriteString("&")
 			}
+			// phải encode value theo chuẩn VNPay
+			encodedVal := url.QueryEscape(v)
+			rawData.WriteString(k + "=" + encodedVal)
+			query.WriteString(k + "=" + encodedVal)
 		}
 	}
 
 	// Hash HMAC SHA512
-	secureHash := config.HmacSHA512(config.SecretKey, rawData)
-	query.Add("vnp_SecureHash", secureHash)
+	secureHash := config.HmacSHA512(config.SecretKey, rawData.String())
+
+	// Thêm SecureHash vào cuối query (KHÔNG encode lại chuỗi hash)
+	query.WriteString("&vnp_SecureHash=" + secureHash)
 
 	// Build final URL
-	paymentUrl := fmt.Sprintf("%s?%s", config.VnpPayURL, query.Encode())
-
-	fmt.Println("VNPay RawData:", rawData)
-	fmt.Println("VNPay SecureHash:", secureHash)
-
+	paymentUrl := fmt.Sprintf("%s?%s", config.VnpPayURL, query.String())
 
 	resp := fiber.Map{
 		"status": "Success",

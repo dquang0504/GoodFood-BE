@@ -17,7 +17,7 @@ const (
 	VnpVersion   = "2.1.0"
 	VnpCommand   = "pay"
 	VnpPayURL    = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
-	VnpReturnURL = "https://fivefood.shop/vnpay_return"
+	VnpReturnURL = "http://localhost:5173/home/payment"
 	VnpTmnCode   = "GHFBIZ5U"
 	SecretKey    = "ZFSNKTR0QRTMJWOSXVYQNM6QYI0KPV05"
 	VnpApiURL    = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction"

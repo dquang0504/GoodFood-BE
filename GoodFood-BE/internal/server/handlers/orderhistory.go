@@ -21,7 +21,7 @@ type InvoiceList struct{
 }
 
 func GetOrderHistory(c *fiber.Ctx) error{
-	tab := c.Query("tab","Đã đặt hàng");
+	tab := c.Query("tab","Order Placed");
 	accountID := c.QueryInt("accountID",0);
 	if accountID == 0{
 		return service.SendError(c,400,"Did not receive accountID!")
