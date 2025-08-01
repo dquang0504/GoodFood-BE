@@ -180,7 +180,7 @@ func UploadFirebaseImages(images map[string][]byte, ctx context.Context) (map[st
 
 func CreateTokenForUser(ctx *fiber.Ctx,username string) (accessToken string, error error){
 	//provide user with a token
-	accessToken,refreshToken, err := auth.CreateToken(username)
+	accessToken,refreshToken,_, err := auth.CreateToken(username)
 	if err != nil{
 		return "",err;
 	}

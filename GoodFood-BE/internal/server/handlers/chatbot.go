@@ -98,14 +98,21 @@ func CallVertexAI(c *fiber.Ctx) error {
 
 //fix cho get_order_status chỉ trả về những hóa đơn của ng đang đăng nhập và suy nghĩ thêm các function mới
 func get_order_status (c *fiber.Ctx, orderID int) error{
-	account, err := models.Accounts(qm.Where("username = ?",auth.GetAuthenticatedUser(c))).One(c.Context(),boil.GetContextDB());
+
+	username := auth.GetAuthenticatedUser(c)
+	if username == "" {
+		return service.SendError(c, 401, "User not authenticated")
+	}
+
+	account, err := models.Accounts(qm.Where("username = ?",username)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-	
+
 	order, err := models.Invoices(qm.Where("\"invoiceID\" = ? AND \"accountID\" = ?",orderID,account.AccountID)).One(c.Context(),boil.GetContextDB())
 	if err != nil{
 		if err.Error() == "sql: no rows in result set"{
+			fmt.Println("accountID: ",account.FullName);
 			resp, err := utils.GiveAnswerForUnreachableData("user asked for the status of an order, but the order does not exist in the database or it's not THEIR order",c)
 			if err != nil{
 				return service.SendError(c,500,err.Error());

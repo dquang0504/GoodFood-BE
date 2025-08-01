@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -12,12 +14,22 @@ var secretKey = []byte("secret-key")
 //Struct chứa thông tin trong JWT
 type Claims struct{
 	Username string `json:"username"`
+	SessionID string `json:"sessionID"`
 	jwt.RegisteredClaims
 }
 
-//Hàm tạo accessToken 15p và refreshToken 7 ngày
-func CreateToken(username string) (string,string,error){
-	//Tạo accessToken 15p
+func generateSessionID() string{
+	bytes := make([]byte,16)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+//used to create accessToken (expires in 15mins) and refreshToken (expires in 7 days)
+func CreateToken(username string) (string,string,string,error){
+	//creating sessionID for every login session
+	sessionID := generateSessionID();
+
+	//Creating accessToken 15mins
 	accessTokenClaims := Claims{
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -28,12 +40,13 @@ func CreateToken(username string) (string,string,error){
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256,accessTokenClaims)
 	accessTokenString, err := accessToken.SignedString(secretKey)
 	if err != nil{
-		return "","",err
+		return "","","",err
 	}
 
-	//Tạo refreshToken 7 ngày
+	//refreshToken 7 days
 	refreshTokenClaims := Claims{
 		Username: username,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
@@ -42,10 +55,10 @@ func CreateToken(username string) (string,string,error){
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256,refreshTokenClaims)
 	refreshTokenString, err := refreshToken.SignedString(secretKey)
 	if err != nil{
-		return "","",err
+		return "","","",err
 	}
 
-	return accessTokenString, refreshTokenString, nil
+	return accessTokenString, refreshTokenString,sessionID, nil
 }
 
 //Xác thực token và trả về Claims nếu hợp lệ

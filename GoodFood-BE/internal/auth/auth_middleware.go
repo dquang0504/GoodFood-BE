@@ -41,6 +41,7 @@ func OptionalAuthMiddleware(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
 		// Không có token => coi như anonymous
+		c.Locals("username",nil);
 		return c.Next()
 	}
 
@@ -68,7 +69,7 @@ func OptionalAuthMiddleware(c *fiber.Ctx) error {
 //Helper function to fetch the logged in user in handlers
 func GetAuthenticatedUser(c *fiber.Ctx) string{
 	username, ok := c.Locals("username").(string)
-	if !ok {
+	if !ok || username == "" {
 		return ""
 	}
 	return username

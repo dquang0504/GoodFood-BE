@@ -42,7 +42,7 @@ func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	userGroup.Get("/login",handlers.HandleLogin)
 	userGroup.Post("/login/google",handlers.HandleLoginGoogle)
 	userGroup.Post("/login/facebook",handlers.HandleLoginFacebook)
-	userGroup.Get("/refresh-token",handlers.RefreshToken)
+	userGroup.Post("/refresh-token",handlers.RefreshToken)
 	userGroup.Put("/update",handlers.HandleUpdateAccount)
 	userGroup.Post("/forgot-password/sendOTP",handlers.HandleForgotPassword)
 	userGroup.Get("/forgot-password/validate",handlers.ValidateResetToken)

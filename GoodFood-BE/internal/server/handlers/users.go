@@ -73,29 +73,21 @@ func HandleLogin(c *fiber.Ctx) error{
 	}
 
 	//provide user with a token
-	accessToken,refreshToken, err := auth.CreateToken(username)
+	accessToken,refreshToken,sessionID, err := auth.CreateToken(username)
 	if err != nil{
 		return service.SendError(c,500,"No username found!")
 	}
 
-	//set refreshToken as HTTP-only Cookie
-	c.Cookie(&fiber.Cookie{
-		Name: "refreshToken",
-		Value: refreshToken,
-		Path: "/",
-		MaxAge: 7*24*60*60, //7 days
-		HTTPOnly: true,
-		Secure: false, //Switch to `true` if running HTTPS
-		SameSite: "None",
-	})
-
-	fmt.Println("Cookie set:", c.Cookies("refreshToken"))
+	//set refreshToken and httpOnly cookie
+	saveCookie(refreshToken,c);
 
 	response := fiber.Map{
 		"status": "Success",
 		"data": fiber.Map{
 			"user": user,
 			"accessToken": accessToken,
+			"refreshToken": refreshToken,
+			"sessionID": sessionID,
 		},
 		"message": "Successfully fetched login details!",
 	}
@@ -132,16 +124,21 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	if err == nil{
 
 		//provide user with a token
-		accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+		accessToken,refreshToken, sessionID, err := auth.CreateToken(existingOAuth.R.AccountIDAccount.Username)
 		if err != nil{
 			return service.SendError(c,500,err.Error());
 		}
+		
+		//set refreshToken and httpOnly cookie
+		saveCookie(refreshToken,c);
 
 		return c.JSON(fiber.Map{
 			"status": "Success",
 			"data": fiber.Map{
 				"user": existingOAuth.R.AccountIDAccount,
 				"accessToken": accessToken,
+				"refreshToken": refreshToken,
+				"sessionID": sessionID,
 			},
 			"message": "Login successfully!",
 		})
@@ -162,16 +159,21 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 			}
 
 			//provide user with a token
-			accessToken, err := utils.CreateTokenForUser(c,existingAccount.Username);
+			accessToken,refreshToken, sessionID, err := auth.CreateToken(existingAccount.Username)
 			if err != nil{
-				return service.SendError(c,500,err.Error());
+				return service.SendError(c,500,"No username found!")
 			}
+
+			//set refreshToken and httpOnly cookie
+			saveCookie(refreshToken,c);
 
 			return c.JSON(fiber.Map{
 				"status": "Success",
 				"data": fiber.Map{
 					"user": existingAccount,
 					"accessToken": accessToken,
+					"refreshToken": refreshToken,
+					"sessionID": sessionID,
 				},
 				"message": "OAuth linked & login successfully!",
 			})
@@ -209,18 +211,23 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	if err := oauthUser.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-
+	
 	//provide user with a token
-	accessToken, err := utils.CreateTokenForUser(c,newUser.Username);
+	accessToken,refreshToken, sessionID, err := auth.CreateToken(newUser.Username)
 	if err != nil{
-		return service.SendError(c,500,err.Error());
+		return service.SendError(c,500,"No username found!")
 	}
+
+	//set refreshToken and httpOnly cookie
+	saveCookie(refreshToken,c);
 
 	response := fiber.Map{
 		"status": "Success",
 		"data": fiber.Map{
 			"user": newUser,
 			"accessToken": accessToken,
+			"refreshToken": refreshToken,
+			"sessionID": sessionID,
 		},
 		"message": "Successfully fetched login details!",
 	}
@@ -244,16 +251,21 @@ func HandleLoginFacebook(c *fiber.Ctx) error{
 	if err == nil{
 
 		//provide user with a token
-		accessToken, err := utils.CreateTokenForUser(c,existingOAuth.R.AccountIDAccount.Username);
+		accessToken,refreshToken,sessionID, err := auth.CreateToken(existingOAuth.R.AccountIDAccount.Username)
 		if err != nil{
-			return service.SendError(c,500,err.Error());
+			return service.SendError(c,500,"No username found!")
 		}
+
+		//set refreshToken and httpOnly cookie
+		saveCookie(refreshToken,c);
 
 		return c.JSON(fiber.Map{
 			"status": "Success",
 			"data": fiber.Map{
 				"user": existingOAuth.R.AccountIDAccount,
 				"accessToken": accessToken,
+				"refreshToken": refreshToken,
+				"sessionID": sessionID,
 			},
 			"message": "Login successfully!",
 		})
@@ -274,16 +286,21 @@ func HandleLoginFacebook(c *fiber.Ctx) error{
 			}
 
 			//provide user with a token
-			accessToken, err := utils.CreateTokenForUser(c,existingAccount.Username);
+			accessToken,refreshToken,sessionID, err := auth.CreateToken(existingAccount.Username)
 			if err != nil{
-				return service.SendError(c,500,err.Error());
+				return service.SendError(c,500,"No username found!")
 			}
+
+			//set refreshToken and httpOnly cookie
+			saveCookie(refreshToken,c);
 
 			return c.JSON(fiber.Map{
 				"status": "Success",
 				"data": fiber.Map{
 					"user": existingAccount,
 					"accessToken": accessToken,
+					"refreshToken": refreshToken,
+					"sessionID": sessionID,
 				},
 				"message": "OAuth linked & login successfully!",
 			})
@@ -324,16 +341,22 @@ func HandleLoginFacebook(c *fiber.Ctx) error{
 	}
 
 	//provide user with a token
-	accessToken, err := utils.CreateTokenForUser(c,newUser.Username);
+	accessToken,refreshToken,sessionID, err := auth.CreateToken(newUser.Username)
 	if err != nil{
-		return service.SendError(c,500,err.Error());
+		return service.SendError(c,500,"No username found!")
 	}
+
+	//set refreshToken and httpOnly cookie
+	saveCookie(refreshToken,c);
 
 	response := fiber.Map{
 		"status": "Success",
 		"data": fiber.Map{
 			"user": newUser,
 			"accessToken": accessToken,
+			"refreshToken": refreshToken,
+			"sessionID": sessionID,
+
 		},
 		"message": "Successfully fetched login details!",
 	}
@@ -532,37 +555,44 @@ func HandleResetPassword(c *fiber.Ctx) error{
 }
 
 func RefreshToken(c *fiber.Ctx) error{
-	//Fetch refreshToken from HTTP-only Cookie
-	refreshToken := c.Cookies("refreshToken")
-	if refreshToken == ""{
-		return service.SendError(c,401,"Missing refresh token")
+	//Fetch refreshToken from response
+	var req struct{
+		SessionID string `json:"sessionID"`
+	}
+	if err := c.BodyParser(&req); err != nil{
+		return service.SendError(c,401,"Mising sessionID");
+	}
+
+	cookie := c.Cookies("refreshToken");
+	if cookie == ""{
+		return service.SendError(c,401,"No refresh token");
 	}
 
 	//Verify refreshToken
-	claims, err := auth.VerifyToken(refreshToken)
+	claims, err := auth.VerifyToken(cookie)
 	if err != nil{
 		return service.SendError(c, 401, "Invalid refresh token")
 	}
 
+	if claims.SessionID != req.SessionID{ //check for matching sessionID
+		fmt.Println("claims ID: ",claims.SessionID)
+		fmt.Println("req session ID: ",req.SessionID)
+		return service.SendError(c,401,"Session mismatch")
+	}
+
 	//Generate new accessToken
-	accessToken, newRefreshToken, err := auth.CreateToken(claims.Username)
+	accessToken, newRefreshToken,newSessionID, err := auth.CreateToken(claims.Username)
 	if err != nil{
 		return service.SendError(c, 500, "Cound not generate token")
 	}
 
-	//Return new accessToken and update new refresh token into Cookie
-	c.Cookie(&fiber.Cookie{
-		Name:     "refreshToken",
-		Value:    newRefreshToken,
-		Path:     "/",
-		MaxAge:   7 * 24 * 60 * 60, // 7 ngày
-		HTTPOnly: true,
-		Secure:   false, // Đổi thành `true` nếu chạy HTTPS
-		SameSite: "None",
-	})
+	saveCookie(newRefreshToken,c);
+
 	response := fiber.Map{
 		"status": "Success",
 		"accessToken": accessToken,
+		"refreshToken": newRefreshToken,
+		"sessionID": newSessionID,
 	}
 	return c.JSON(response)
 }
@@ -596,4 +626,16 @@ func HandleContact(c *fiber.Ctx) error{
 	}
 
 	return c.JSON(response);
+}
+
+func saveCookie(refreshToken string,c *fiber.Ctx){
+	c.Cookie(&fiber.Cookie{
+        Name:     "refreshToken",
+        Value:    refreshToken,
+        HTTPOnly: true,
+        Secure:   false,
+        SameSite: "Lax",
+        Path:     "/",
+        Expires:  time.Now().Add(7 * 24 * time.Hour),
+    })
 }

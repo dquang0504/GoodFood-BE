@@ -62,7 +62,7 @@ func InvoicePayVNPAY(c *fiber.Ctx) error{
 
 	//amount * 100 (vnpay requirement)
 	amount := int64(body.TotalPrice) * 100
-	orderId := strconv.Itoa(body.InvoiceID + 18)
+	orderId := strconv.Itoa(body.InvoiceID + 2)
 
 	//query params
 	vnpParams := map[string]string{
