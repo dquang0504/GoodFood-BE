@@ -326,6 +326,7 @@ type Star struct{
 }
 type ProductDetailResponse struct{
 	models.Product `json:"product"`
+	ProductImages models.ProductImageSlice `json:"productImages"`
 	FiveStarsReview []ReviewResponse `json:"review"`
 	Stars Star `json:"stars"`
 }
@@ -348,11 +349,14 @@ func GetDetail(c *fiber.Ctx) error{
 	}
 	
 	//fetching and setting data of ProductDetailResponse
-	detail, err := models.Products(qm.Where("\"productID\" = ?",id)).One(c.Context(),boil.GetContextDB());
+	detail, err := models.Products(qm.Where("\"productID\" = ?",id),qm.Load(models.ProductRels.ProductIDProductImages)).One(c.Context(),boil.GetContextDB());
 	if err != nil {
 		return service.SendError(c, 500, "product not found");
 	}
 	detailedResponse.Product = *detail
+
+	//setting ProductImages
+	detailedResponse.ProductImages = detail.R.ProductIDProductImages
 
 	//filter logic
 	reviewResult, err, totalPage := reviewDisplay(c.Context(),id, filter,offset);
