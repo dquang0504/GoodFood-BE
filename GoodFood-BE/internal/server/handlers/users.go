@@ -73,7 +73,7 @@ func HandleLogin(c *fiber.Ctx) error{
 	}
 
 	//provide user with a token
-	accessToken,refreshToken,sessionID, err := auth.CreateToken(username)
+	accessToken,refreshToken,sessionID, err := auth.CreateToken(username,"")
 	if err != nil{
 		return service.SendError(c,500,"No username found!")
 	}
@@ -124,7 +124,7 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	if err == nil{
 
 		//provide user with a token
-		accessToken,refreshToken, sessionID, err := auth.CreateToken(existingOAuth.R.AccountIDAccount.Username)
+		accessToken,refreshToken, sessionID, err := auth.CreateToken(existingOAuth.R.AccountIDAccount.Username, "")
 		if err != nil{
 			return service.SendError(c,500,err.Error());
 		}
@@ -159,7 +159,7 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 			}
 
 			//provide user with a token
-			accessToken,refreshToken, sessionID, err := auth.CreateToken(existingAccount.Username)
+			accessToken,refreshToken, sessionID, err := auth.CreateToken(existingAccount.Username, "")
 			if err != nil{
 				return service.SendError(c,500,"No username found!")
 			}
@@ -213,7 +213,7 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	}
 	
 	//provide user with a token
-	accessToken,refreshToken, sessionID, err := auth.CreateToken(newUser.Username)
+	accessToken,refreshToken, sessionID, err := auth.CreateToken(newUser.Username,"")
 	if err != nil{
 		return service.SendError(c,500,"No username found!")
 	}
@@ -251,7 +251,7 @@ func HandleLoginFacebook(c *fiber.Ctx) error{
 	if err == nil{
 
 		//provide user with a token
-		accessToken,refreshToken,sessionID, err := auth.CreateToken(existingOAuth.R.AccountIDAccount.Username)
+		accessToken,refreshToken,sessionID, err := auth.CreateToken(existingOAuth.R.AccountIDAccount.Username, "")
 		if err != nil{
 			return service.SendError(c,500,"No username found!")
 		}
@@ -286,7 +286,7 @@ func HandleLoginFacebook(c *fiber.Ctx) error{
 			}
 
 			//provide user with a token
-			accessToken,refreshToken,sessionID, err := auth.CreateToken(existingAccount.Username)
+			accessToken,refreshToken,sessionID, err := auth.CreateToken(existingAccount.Username, "")
 			if err != nil{
 				return service.SendError(c,500,"No username found!")
 			}
@@ -341,7 +341,7 @@ func HandleLoginFacebook(c *fiber.Ctx) error{
 	}
 
 	//provide user with a token
-	accessToken,refreshToken,sessionID, err := auth.CreateToken(newUser.Username)
+	accessToken,refreshToken,sessionID, err := auth.CreateToken(newUser.Username, "")
 	if err != nil{
 		return service.SendError(c,500,"No username found!")
 	}
@@ -555,7 +555,7 @@ func HandleResetPassword(c *fiber.Ctx) error{
 }
 
 func RefreshToken(c *fiber.Ctx) error{
-	//Fetch refreshToken from response
+	//Fetch sessionID from response
 	var req struct{
 		SessionID string `json:"sessionID"`
 	}
@@ -580,19 +580,17 @@ func RefreshToken(c *fiber.Ctx) error{
 		return service.SendError(c,401,"Session mismatch")
 	}
 
+	fmt.Println("claims ID current: ",claims.SessionID)
+
 	//Generate new accessToken
-	accessToken, newRefreshToken,newSessionID, err := auth.CreateToken(claims.Username)
+	accessToken, _,_, err := auth.CreateToken(claims.Username, claims.SessionID)
 	if err != nil{
 		return service.SendError(c, 500, "Cound not generate token")
 	}
 
-	saveCookie(newRefreshToken,c);
-
 	response := fiber.Map{
 		"status": "Success",
 		"accessToken": accessToken,
-		"refreshToken": newRefreshToken,
-		"sessionID": newSessionID,
 	}
 	return c.JSON(response)
 }

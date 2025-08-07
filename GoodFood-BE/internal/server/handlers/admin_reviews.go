@@ -202,8 +202,7 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 		return c.JSON(json.RawMessage(cachedReviewAnalysis))
 	}
 
-	//sending all reviews to python to analyze
-	//here
+	//fetching all reviews to send to python to analyze
 	reviews, err := models.Reviews().All(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error())
@@ -244,11 +243,24 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 		default:
 			fmt.Println("Do nothing in fallback")
 	}
+	
+	//pagination
+	total := len(sortingResult);
+	totalPage := int(math.Ceil(float64(total)/6))
+
+	startIndex := (page - 1) * 6
+	endIndex := startIndex + 6
+	if endIndex > total{
+		endIndex = total
+	}
+	pagedResult := sortingResult[startIndex:endIndex]
 
 
 	resp := fiber.Map{
 		"status": "Success",
-		"result": sortingResult,
+		"result": pagedResult,
+		"page": page,
+		"totalPage": totalPage,
 		"message": "Successfully fetched review values!",
 	}
 

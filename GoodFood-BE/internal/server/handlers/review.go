@@ -100,7 +100,7 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 	if err != nil {
 		return service.SendError(c, 400, "Error parsing multipart: "+err.Error())
 	}
-	files := form.File["images"]
+	files := form.File["reviewImages"]
 
 	// 3. Đọc binary các file ảnh để gửi cho gRPC Flask
 	var imageBinaries = make(map[string][]byte)

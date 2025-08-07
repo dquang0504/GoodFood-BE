@@ -25,9 +25,11 @@ func generateSessionID() string{
 }
 
 //used to create accessToken (expires in 15mins) and refreshToken (expires in 7 days)
-func CreateToken(username string) (string,string,string,error){
+func CreateToken(username string, sessionID string) (string,string,string,error){
 	//creating sessionID for every login session
-	sessionID := generateSessionID();
+	if sessionID == ""{
+		sessionID = generateSessionID();
+	}
 
 	//Creating accessToken 15mins
 	accessTokenClaims := Claims{
