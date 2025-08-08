@@ -210,9 +210,11 @@ func GetReviewDetail(c *fiber.Ctx) error{
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-	fmt.Println("Here lies: ",review.AccountID);
+	
 	invoiceDetails, err := models.InvoiceDetails(qm.Where("\"invoiceID\" = ? AND \"productID\" = ?",review.InvoiceID,review.ProductID)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
+		fmt.Println(review.InvoiceID);
+		fmt.Println(review.ProductID);
 		return service.SendError(c,500,err.Error());
 	}
 
@@ -235,15 +237,87 @@ func GetReviewDetail(c *fiber.Ctx) error{
 }
 
 func HandleUpdateReview(c *fiber.Ctx) error{
+	//resty
+	client := resty.New();
+
+	// 1. Parse phần "review" từ multipart
+	reviewJson := c.FormValue("review")
+	if reviewJson == "" {
+		return service.SendError(c, 400, "Missing review data")
+	}
+
+
 	reviewID := c.QueryInt("reviewID",0);
 	if reviewID == 0{
 		return service.SendError(c,400,"Did not receive reviewID");
 	}
-	body := ReviewSubmitResponse{}
-	err := c.BodyParser(&body);
-	if err != nil{
-		return service.SendError(c,400,err.Error());
+	var body ReviewSubmitResponse
+	if err := json.Unmarshal([]byte(reviewJson), &body); err != nil {
+		return service.SendError(c, 400, "Invalid review JSON: "+err.Error())
 	}
+
+	// 2. Lấy tất cả file "images"
+	form, err := c.MultipartForm()
+	if err != nil {
+		return service.SendError(c, 400, "Error parsing multipart: "+err.Error())
+	}
+	files := form.File["reviewImages"]
+
+	// 3. Đọc binary các file ảnh để gửi cho gRPC Flask
+	var imageBinaries = make(map[string][]byte)
+	for _, file := range files {
+		f, err := file.Open()
+		if err != nil {
+			return service.SendError(c, 500, "Failed to open image: "+err.Error())
+		}
+		defer f.Close()
+
+		buf, err := io.ReadAll(f)
+		if err != nil {
+			return service.SendError(c, 500, "Failed to read image: "+err.Error())
+		}
+		imageBinaries[file.Filename] = buf
+	}
+
+	// 4. Gửi ảnh binary & comment tới Flask để kiểm duyệt
+	payload := map[string]interface{}{
+		"review": body.Comment,
+		"images": imageBinaries,
+	}
+
+	var result ReviewContentDetection
+	_, err = client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload).
+		SetResult(&result).
+		Post("http://192.168.240.1:5000/reviewLabel")
+
+	if err != nil {
+		return service.SendError(c, 500, "Failed to call gRPC Flask: "+err.Error())
+	}
+
+	if result.Label == "toxic" {
+		return service.SendError(c, 400, "⚠️ Hate Speech Detected: Please edit your comment.")
+	}
+
+	//NSFW and violence detection alerts
+	for _, img := range result.Images {
+		fmt.Println(img);
+		if img.NSFW {
+			return service.SendError(c, 400, "⚠️ NSFW Content Detected. Please remove or replace the image: "+img.Image)
+		}
+
+		if img.Violent{
+			return service.SendError(c, 400, "⚠️ Violence Detected. Please remove or replace the image: "+img.Image)
+		}
+	}
+
+	//insert images into firebase storage
+	uploadedURLs, err := utils.UploadFirebaseImages(imageBinaries,c.Context());
+	if err != nil{
+		return service.SendError(c,500, err.Error())
+	}
+
 	//fetching the referred review
 	review, err := models.Reviews(qm.Where("\"reviewID\" = ?",reviewID)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
@@ -259,22 +333,17 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 	}
 	//insert its corresponding review images and maybe delete previous ones
 	var reviewImages = body.ReviewImages
-	if len(reviewImages) > 0{
-		//checking if new images are uploaded then delete every image of the review
-		deleteImgs,err := models.ReviewImages(qm.Where("\"reviewID\" = ?",body.ReviewID)).All(c.Context(),boil.GetContextDB());
+	for _, url := range uploadedURLs{
+		reviewImages = append(reviewImages, models.ReviewImage{
+			ReviewID: body.ReviewID,
+			ImageName: url,
+		})
+	}
+
+	for _, img := range reviewImages{
+		err = img.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 		if err != nil{
 			return service.SendError(c,500,err.Error());
-		}
-		_,err = deleteImgs.DeleteAll(c.Context(),boil.GetContextDB())
-		if err != nil{
-			return service.SendError(c,500,err.Error());
-		}
-		//iterate through images and start inserting one by one image
-		for i := range reviewImages{
-			reviewImages[i].ReviewID = body.ReviewID;
-			if err := reviewImages[i].Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
-				return service.SendError(c,500,err.Error());
-			}
 		}
 	}
 
