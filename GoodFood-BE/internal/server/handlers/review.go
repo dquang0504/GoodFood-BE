@@ -2,9 +2,10 @@ package handlers
 
 import (
 	redisdatabase "GoodFood-BE/internal/redis-database"
-	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -277,6 +278,7 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 			return service.SendError(c, 500, "Failed to read image: "+err.Error())
 		}
 		imageBinaries[file.Filename] = buf
+		fmt.Println(imageBinaries);
 	}
 
 	// 4. Gửi ảnh binary & comment tới Flask để kiểm duyệt
@@ -313,9 +315,12 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 	}
 
 	//insert images into firebase storage
-	uploadedURLs, err := utils.UploadFirebaseImages(imageBinaries,c.Context());
-	if err != nil{
-		return service.SendError(c,500, err.Error())
+	var uploadedURLs map[string]string
+	if(len(imageBinaries) > 0){
+		uploadedURLs, err = utils.UploadFirebaseImages(imageBinaries,c.Context());
+		if err != nil{
+			return service.SendError(c,500, err.Error())
+		}
 	}
 
 	//fetching the referred review
@@ -333,17 +338,33 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 	}
 	//insert its corresponding review images and maybe delete previous ones
 	var reviewImages = body.ReviewImages
-	for _, url := range uploadedURLs{
-		reviewImages = append(reviewImages, models.ReviewImage{
-			ReviewID: body.ReviewID,
-			ImageName: url,
-		})
-	}
+	//if an image is uploaded, delete the previous ones
+	if(len(uploadedURLs) > 0){
+		for _, url := range uploadedURLs{
+			reviewImages = append(reviewImages, models.ReviewImage{
+				ReviewID: body.ReviewID,
+				ImageName: url,
+			})
+		}
 
-	for _, img := range reviewImages{
-		err = img.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
+		getReviewImgs, err := models.ReviewImages(qm.Where("\"reviewID\" = ?",body.ReviewID)).All(c.Context(),boil.GetContextDB());
 		if err != nil{
 			return service.SendError(c,500,err.Error());
+		}
+		//deleting previous ones
+		for _, img := range getReviewImgs{
+			_,err = img.Delete(context.Background(),boil.GetContextDB());
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
+		}
+
+		//inserting new ones
+		for _, img := range reviewImages{
+			err = img.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
 		}
 	}
 
