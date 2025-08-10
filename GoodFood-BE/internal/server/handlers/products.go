@@ -34,7 +34,7 @@ func GetFour(c *fiber.Ctx) error {
 	ctx := c.Context()
 
 	// Truy vấn danh sách sản phẩm
-	products, err := models.Products(qm.Limit(4), qm.Load(models.ProductRels.ProductTypeIDProductType)).All(ctx, boil.GetContextDB())
+	products, err := models.Products(qm.Where("status = true"),qm.Limit(4), qm.Load(models.ProductRels.ProductTypeIDProductType)).All(ctx, boil.GetContextDB())
 	if err != nil {
 		return service.SendError(c,500,"Failed to fetch products")
 	}
@@ -91,6 +91,7 @@ func GetProductsByPage(c *fiber.Ctx) error{
 
 	//Tạo query mod
 	queryMods := []qm.QueryMod{
+		qm.Where("status = true"),
 		qm.Where("price BETWEEN ? AND ?",minPrice,maxPrice),
 		qm.Load(models.ProductRels.ProductTypeIDProductType),
 	}
@@ -130,7 +131,7 @@ func GetProductsByPage(c *fiber.Ctx) error{
 	totalPage := int(math.Ceil(float64(totalProduct) / float64(6)))
 
 	//Creating redis key after page,type,search
-	redisKey := fmt.Sprintf("products:page%d:type=%s:search=%s:minPrice=%d:maxPrice=%d:orderByPrice=%s",page,typeName,search,minPrice,maxPrice,orderBy)
+	redisKey := fmt.Sprintf("products:page=%d:type=%s:search=%s:minPrice=%d:maxPrice=%d:orderByPrice=%s",page,typeName,search,minPrice,maxPrice,orderBy)
 	//Checking if redis key exists
 	cachedProducts,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
 	fmt.Println("Cached data:", cachedProducts)
@@ -156,10 +157,11 @@ func GetProductsByPage(c *fiber.Ctx) error{
 	}
 
 	//saving redis key to redis database for 10 mins
-	jsonData, _ := json.Marshal(resp)
-	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData, 10*time.Minute)
+	jsonData, _ := json.Marshal(resp);
+	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData, 10*time.Minute);
+	rdsErr := redisdatabase.Client.SAdd(redisdatabase.Ctx,"products:keys",redisKey)
 	if rdsErr != nil{
-		fmt.Println("Failed to cache product data:", rdsErr)
+		fmt.Println("Error adding redis key to set: ", err)
 	}
 
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
 	"fmt"
@@ -181,6 +182,33 @@ func AdminProductCreate(c *fiber.Ctx) error{
 		}
 	}
 
+	//clear all redis keys related to products
+	pattern := "products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*";
+	iter := redisdatabase.Client.Scan(redisdatabase.Ctx, 0, pattern, 0).Iterator()
+	for iter.Next(redisdatabase.Ctx){
+		key := iter.Val()
+		err := redisdatabase.Client.Del(redisdatabase.Ctx,key).Err()
+		if err != nil{
+			fmt.Sprintf("failed to delete keys products %s: %v\n",key,err)
+		}
+	}
+	if err := iter.Err(); err != nil{
+		fmt.Printf("Error during Redis scan: %v\n", err);
+	}
+	//clear all redis keys related to product detail
+	pattern = fmt.Sprintf("product:detail:%d:filter=*:page=*",insert.ProductID);
+	iter = redisdatabase.Client.Scan(redisdatabase.Ctx, 0, pattern, 0).Iterator()
+	for iter.Next(redisdatabase.Ctx){
+		key := iter.Val()
+		err := redisdatabase.Client.Del(redisdatabase.Ctx,key).Err()
+		if err != nil{
+			fmt.Sprintf("failed to delete keys product:detail %s: %v\n",key,err)
+		}
+	}
+	if err := iter.Err(); err != nil{
+		fmt.Printf("Error during Redis scan: %v\n", err);
+	}
+
 	resp := fiber.Map{
 		"status": "Success",
 		"data": insert,
@@ -207,7 +235,16 @@ func AdminProductUpdate(c *fiber.Ctx) error{
 		return service.SendErrorStruct(c,400,errObj);
 	}
 
-	_,err := update.Update(c.Context(),boil.GetContextDB(),boil.Infer());
+	//checking if product previously had a coverImg
+	product, err := models.Products(qm.Where("\"productID\" = ?",productID)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,err.Error());
+	}
+	if product.CoverImage != ""{
+		update.CoverImage = product.CoverImage
+	}
+
+	_,err = update.Update(c.Context(),boil.GetContextDB(),boil.Infer());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
@@ -229,6 +266,33 @@ func AdminProductUpdate(c *fiber.Ctx) error{
 				return service.SendError(c,500,err.Error());
 			}
 		}
+	}
+
+	//clear all redis keys related to products
+	pattern := "products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*";
+	iter := redisdatabase.Client.Scan(redisdatabase.Ctx, 0, pattern, 0).Iterator()
+	for iter.Next(redisdatabase.Ctx){
+		key := iter.Val()
+		err := redisdatabase.Client.Del(redisdatabase.Ctx,key).Err()
+		if err != nil{
+			fmt.Sprintf("failed to delete keys products %s: %v\n",key,err)
+		}
+	}
+	if err := iter.Err(); err != nil{
+		fmt.Printf("Error during Redis scan: %v\n", err);
+	}
+	//clear all redis keys related to product detail
+	pattern = fmt.Sprintf("product:detail:%d:filter=*:page=*",update.ProductID);
+	iter = redisdatabase.Client.Scan(redisdatabase.Ctx, 0, pattern, 0).Iterator()
+	for iter.Next(redisdatabase.Ctx){
+		key := iter.Val()
+		err := redisdatabase.Client.Del(redisdatabase.Ctx,key).Err()
+		if err != nil{
+			fmt.Sprintf("failed to delete keys product:detail %s: %v\n",key,err)
+		}
+	}
+	if err := iter.Err(); err != nil{
+		fmt.Printf("Error during Redis scan: %v\n", err);
 	}
 
 	resp := fiber.Map{
