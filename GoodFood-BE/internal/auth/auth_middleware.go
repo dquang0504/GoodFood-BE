@@ -2,6 +2,7 @@ package auth
 
 import (
 	"GoodFood-BE/internal/service"
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -40,8 +41,7 @@ func AuthMiddleware(c *fiber.Ctx) error{
 func OptionalAuthMiddleware(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
-		// Không có token => coi như anonymous
-		c.Locals("username",nil);
+		fmt.Println("I hate you")
 		return c.Next()
 	}
 

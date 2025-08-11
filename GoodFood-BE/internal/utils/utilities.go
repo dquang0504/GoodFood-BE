@@ -10,10 +10,14 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	firebase "firebase.google.com/go"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofrs/uuid"
 	"google.golang.org/api/option"
 	"google.golang.org/genai"
 	"gopkg.in/gomail.v2"
@@ -101,38 +105,75 @@ func ClearProductCache(productID int) error{
 	return nil
 }
 
-func InitializeFirebaseApp(ctx context.Context) *firebase.App{
-	//firebase app initialization
-	config := &firebase.Config{
-		StorageBucket: "fivefood-datn-8a1cf.appspot.com",
-	}
-	app, err := firebase.NewApp(ctx,config,option.WithCredentialsFile("./config/fivefood-datn-8a1cf-firebase-adminsdk-n0vxi-9ad735160d.json"))
-	if err != nil{
-		log.Fatalf("error initializing app: %v\n", err)
-	}
-	return app
+func InitializeFirebaseApp(ctx context.Context) *firebase.App {
+    raw := os.Getenv("FIREBASE_SERVICE_ACCOUNT")
+    if raw == "" {
+        log.Fatal("FIREBASE_SERVICE_ACCOUNT environment variable is not set")
+    }
+
+    // Parse JSON vào map
+    var tmp map[string]string
+    if err := json.Unmarshal([]byte(raw), &tmp); err != nil {
+        log.Fatalf("Invalid FIREBASE_SERVICE_ACCOUNT JSON: %v", err)
+    }
+
+    // Replace \n trong private_key
+    tmp["private_key"] = strings.ReplaceAll(tmp["private_key"], `\n`, "\n")
+
+    // Marshal lại thành JSON hợp lệ
+    fixedJSON, _ := json.Marshal(tmp)
+
+    config := &firebase.Config{
+        StorageBucket: tmp["storageBucket"],
+    }
+
+    app, err := firebase.NewApp(ctx, config, option.WithCredentialsJSON(fixedJSON))
+    if err != nil {
+        log.Fatalf("error initializing app: %v\n", err)
+    }
+
+    return app
 }
 
-func DeleteFirebaseImage(imgPath string, ctx context.Context) error{
+func DeleteFirebaseImage(imgPath string, ctx context.Context) error {
 	app := InitializeFirebaseApp(ctx)
 
 	storageClient, err := app.Storage(ctx)
-	if err != nil{
+	if err != nil {
 		return err
 	}
 
 	bucket, err := storageClient.DefaultBucket()
-	if err != nil{
+	if err != nil {
 		return err
 	}
 
+	// Nếu imgPath là URL đầy đủ thì tách ra thành object path
+	if strings.HasPrefix(imgPath, "http") {
+		// Bỏ query string
+		parts := strings.Split(imgPath, "?")
+		urlPath := parts[0]
+
+		// Giải mã %2F thành /
+		decoded, err := url.PathUnescape(urlPath)
+		if err != nil {
+			return fmt.Errorf("failed to decode path: %w", err)
+		}
+
+		// Lấy phần sau "/o/"
+		if idx := strings.Index(decoded, "/o/"); idx != -1 {
+			imgPath = decoded[idx+3:] // sau "/o/"
+		}
+	}
+
 	obj := bucket.Object(imgPath)
-	if err := obj.Delete(ctx); err != nil{
+	if err := obj.Delete(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
+
 
 func UploadFirebaseImages(images map[string][]byte, ctx context.Context) (map[string]string, error) {
 	app := InitializeFirebaseApp(ctx)
@@ -151,28 +192,33 @@ func UploadFirebaseImages(images map[string][]byte, ctx context.Context) (map[st
 	uploadedURLs := make(map[string]string)
 
 	for imageName, imageData := range images {
-		obj := bucket.Object("AnhDanhGia/" + imageName) // optional: prefix folder "reviews/"
+		id, err := uuid.NewV4()
+		if err != nil {
+			fmt.Println(err.Error()) // hoặc xử lý lỗi
+		}
+		newImageName := fmt.Sprintf("%s_%s", strings.TrimSuffix(imageName, filepath.Ext(imageName)),id.String()+filepath.Ext(imageName))
+		obj := bucket.Object("AnhDanhGia/" + newImageName) // optional: prefix folder "reviews/"
 		writer := obj.NewWriter(ctx)
 		writer.ContentType = "image/jpeg"
 
 		if _, err := writer.Write(imageData); err != nil {
 			writer.Close()
-			return nil, fmt.Errorf("failed to upload %s: %w", imageName, err)
+			return nil, fmt.Errorf("failed to upload %s: %w", newImageName, err)
 		}
 
 		if err := writer.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close writer for %s: %w", imageName, err)
+			return nil, fmt.Errorf("failed to close writer for %s: %w", newImageName, err)
 		}
 		// Cho phép truy cập public
-		err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader)
+		err = obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader)
 		if err != nil{
-			return nil, fmt.Errorf("failed to set files public %s: %w", imageName, err)
+			return nil, fmt.Errorf("failed to set files public %s: %w", newImageName, err)
 		}
 
-		objectPath := "AnhDanhGia/" + imageName
+		objectPath := "AnhDanhGia/" + newImageName
 		encodedPath := url.QueryEscape(objectPath)
 		publicURL := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o/%s?alt=media", bucket.BucketName(), encodedPath)
-		uploadedURLs[imageName] = publicURL
+		uploadedURLs[newImageName] = publicURL
 	}
 
 	return uploadedURLs, nil
@@ -289,8 +335,8 @@ func FunctionDeclaration() []*genai.FunctionDeclaration {
 
 func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.GenerateContentResponse, error){
 	client, err := genai.NewClient(c.Context(), &genai.ClientConfig{
-		Project:  "322745191572",
-		Location: "us-central1",
+		Project:  os.Getenv("VERTEX_AI_PROJECT"),
+		Location: os.Getenv("VERTEX_AI_LOCATION"),
 		Backend:  genai.BackendVertexAI,
 	})
 	if err != nil {
@@ -323,7 +369,7 @@ func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.Generat
 
 	// ✅ Generate content
 	res, err := client.Models.GenerateContent(c.Context(),
-		"projects/322745191572/locations/us-central1/endpoints/5530821664155107328",
+		os.Getenv("VERTEX_AI_MODEL"),
 		contents,
 		config,
 	)

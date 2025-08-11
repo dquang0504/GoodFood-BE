@@ -6,6 +6,7 @@ import (
 	"GoodFood-BE/models"
 	"fmt"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,7 +69,7 @@ func InvoicePayVNPAY(c *fiber.Ctx) error{
 	vnpParams := map[string]string{
 		"vnp_Version": 	 config.VnpVersion,
 		"vnp_Command":   config.VnpCommand,
-		"vnp_TmnCode":   config.VnpTmnCode,
+		"vnp_TmnCode":   os.Getenv("VNPAY_TMN"),
 		"vnp_Amount":    strconv.FormatInt(amount, 10),
 		"vnp_CurrCode":  "VND",
 		"vnp_BankCode":  "NCB",
@@ -111,7 +112,7 @@ func InvoicePayVNPAY(c *fiber.Ctx) error{
 	}
 
 	// Hash HMAC SHA512
-	secureHash := config.HmacSHA512(config.SecretKey, rawData.String())
+	secureHash := config.HmacSHA512(os.Getenv("VNPAY_SECRET"), rawData.String())
 
 	// Thêm SecureHash vào cuối query (KHÔNG encode lại chuỗi hash)
 	query.WriteString("&vnp_SecureHash=" + secureHash)

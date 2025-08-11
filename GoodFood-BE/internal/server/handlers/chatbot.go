@@ -6,6 +6,7 @@ import (
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -103,6 +104,7 @@ func get_order_status (c *fiber.Ctx, orderID int) error{
 	if username == "" {
 		return service.SendError(c, 401, "User not authenticated")
 	}
+	fmt.Println("username");
 
 	account, err := models.Accounts(qm.Where("username = ?",username)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
@@ -183,11 +185,14 @@ func get_top_product (c *fiber.Ctx) error{
 
 func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod string) error{
 	carts := []CartDetailResponse{}
-	user, err := models.Accounts(qm.Where("username = ?",auth.GetAuthenticatedUser(c))).One(c.Context(),boil.GetContextDB());
+	username := auth.GetAuthenticatedUser(c)
+	if username == "" {
+		return service.SendError(c, 401, "User not authenticated")
+	}
+	user, err := models.Accounts(qm.Where("username = ?",username)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
-
 	//address fetching logic
 	address, err := models.Addresses(qm.Where("\"accountID\" = ? AND status = true",user.AccountID)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
@@ -196,11 +201,20 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod 
 
 	//products fetching logic
 	for _,pro := range products{
-		quantity := int(pro["quantity"].(float64))
-		productName := pro["product_name"].(string)
+		quantity := int(pro["quantity"].(float64));
+		productName := pro["product_name"].(string);
 		product, err := models.Products(qm.Where("\"productName\" ILIKE ?","%"+productName+"%")).One(c.Context(),boil.GetContextDB());
-		if err != nil{
-			return service.SendError(c,500,err.Error());
+		if err == sql.ErrNoRows{
+			question := fmt.Sprintf("User wanted to place an order which consists of a product that doesn't exist in the database, specifically they asked for %s",productName)
+			resp, err := utils.GiveAnswerForUnreachableData(question,c);
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
+			return c.JSON(fiber.Map{
+				"status":  "Success",
+				"data":    resp,
+				"message": "Fine-tuned model response OK",
+			})
 		}
 
 		//inserting product to cart

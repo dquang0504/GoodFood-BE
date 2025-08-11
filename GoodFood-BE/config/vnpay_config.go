@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -18,8 +19,6 @@ const (
 	VnpCommand   = "pay"
 	VnpPayURL    = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
 	VnpReturnURL = "http://localhost:5173/home/payment"
-	VnpTmnCode   = "GHFBIZ5U"
-	SecretKey    = "ZFSNKTR0QRTMJWOSXVYQNM6QYI0KPV05"
 	VnpApiURL    = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction"
 	Vnp_IpAddr   = "127.0.0.1"
 	VnpCurrCode  = "VND"
@@ -66,7 +65,7 @@ func HashAllFields(fields map[string]string) string {
 		}
 	}
 
-	return HmacSHA512(SecretKey, sb.String())
+	return HmacSHA512(os.Getenv("VNPAY_SECRET"), sb.String())
 }
 
 // GetRandomNumber: tạo chuỗi số ngẫu nhiên

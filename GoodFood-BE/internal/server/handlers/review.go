@@ -351,7 +351,16 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 		if err != nil{
 			return service.SendError(c,500,err.Error());
 		}
-		//deleting previous ones
+
+		//deleting previous ones on firebase storage
+		for _, img := range getReviewImgs{
+			err := utils.DeleteFirebaseImage(img.ImageName,context.Background());
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
+		}
+
+		//deleting previous ones in DB
 		for _, img := range getReviewImgs{
 			_,err = img.Delete(context.Background(),boil.GetContextDB());
 			if err != nil{

@@ -8,6 +8,7 @@ import (
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -105,7 +106,7 @@ func HandleLoginGoogle(c *fiber.Ctx) error{
 	}
 
 	idToken := body.AccessToken
-	audience := "331299660257-2iif19euj1k218243c0q77q3ruesjtp3.apps.googleusercontent.com"
+	audience := os.Getenv("GOOGLE_AUDIENCE")
 
 	//authorize token with google
 	payload, err := idtoken.Validate(c.Context(),idToken,audience);
