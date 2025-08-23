@@ -406,7 +406,7 @@ func GiveStructuredAnswer(question string,prompt string, c *fiber.Ctx) (string, 
 
 func GiveAnswerForUnreachableData(question string,c *fiber.Ctx) (string, error) {
 	instructionNdPrompt := fmt.Sprintf(
-		"The question is about %s in GoodFood24h. Write a short answer explaining to the user why the data is restricted from them and try to make it easy to understand, don't use any coding terminology.",
+		"The question is about %s in GoodFood24h. Write a short answer explaining to the user and don't use any coding terminology. Make sure to reply in English",
 		question,
 	)
 	res, err := CallVertexAI(instructionNdPrompt, c, false)

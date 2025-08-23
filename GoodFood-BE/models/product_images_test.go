@@ -149,7 +149,7 @@ func testProductImagesExists(t *testing.T) {
 		t.Error(err)
 	}
 
-	e, err := ProductImageExists(ctx, tx, o.ProdutImageID)
+	e, err := ProductImageExists(ctx, tx, o.ProductImageID)
 	if err != nil {
 		t.Errorf("Unable to check if ProductImage exists: %s", err)
 	}
@@ -175,7 +175,7 @@ func testProductImagesFind(t *testing.T) {
 		t.Error(err)
 	}
 
-	productImageFound, err := FindProductImage(ctx, tx, o.ProdutImageID)
+	productImageFound, err := FindProductImage(ctx, tx, o.ProductImageID)
 	if err != nil {
 		t.Error(err)
 	}
@@ -687,7 +687,7 @@ func testProductImagesSelect(t *testing.T) {
 }
 
 var (
-	productImageDBTypes = map[string]string{`ProdutImageID`: `integer`, `Image`: `character varying`, `ProductID`: `integer`}
+	productImageDBTypes = map[string]string{`ProductImageID`: `integer`, `Image`: `character varying`, `ProductID`: `integer`}
 	_                   = bytes.MinRead
 )
 
@@ -778,7 +778,6 @@ func testProductImagesSliceUpdateAll(t *testing.T) {
 			productImageAllColumns,
 			productImagePrimaryKeyColumns,
 		)
-		fields = strmangle.SetComplement(fields, productImageGeneratedColumns)
 	}
 
 	value := reflect.Indirect(reflect.ValueOf(o))

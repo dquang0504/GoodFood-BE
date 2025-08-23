@@ -1296,7 +1296,7 @@ func (o *Product) AddProductIDProductImages(ctx context.Context, exec boil.Conte
 				strmangle.SetParamNames("\"", "\"", 1, []string{"productID"}),
 				strmangle.WhereClause("\"", "\"", 2, productImagePrimaryKeyColumns),
 			)
-			values := []interface{}{o.ProductID, rel.ProdutImageID}
+			values := []interface{}{o.ProductID, rel.ProductImageID}
 
 			if boil.IsDebug(ctx) {
 				writer := boil.DebugWriterFrom(ctx)

@@ -195,9 +195,18 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod 
 	}
 	//address fetching logic
 	address, err := models.Addresses(qm.Where("\"accountID\" = ? AND status = true",user.AccountID)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
-	}
+	if err == sql.ErrNoRows{
+			question := "The user wanted to place an order but they didn't have a delivery address. Politely asked them to add their delivery address first at Account > Delivery Address"
+			resp, err := utils.GiveAnswerForUnreachableData(question,c);
+			if err != nil{
+				return service.SendError(c,500,err.Error());
+			}
+			return c.JSON(fiber.Map{
+				"status":  "Success",
+				"data":    resp,
+				"message": "Fine-tuned model response OK",
+			})
+		}
 
 	//products fetching logic
 	for _,pro := range products{

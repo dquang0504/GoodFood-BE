@@ -89,7 +89,7 @@ func GetAdminProducts(c *fiber.Ctx) error{
 		case "High to low price":
 			queryMods = append(queryMods, qm.OrderBy("price DESC"))
 		default: 
-			fmt.Println("wrong case");
+			fmt.Println("Doing nothing");
 
 	}
 	queryMods = append(queryMods, qm.OrderBy("\"productID\" DESC"), qm.Limit(6), qm.Offset(offset), qm.Load(models.ProductRels.ProductTypeIDProductType));
@@ -167,9 +167,9 @@ func AdminProductCreate(c *fiber.Ctx) error{
 		return service.SendErrorStruct(c,400,errObj);
 	}
 
-	err := insert.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
+	err := insert.Product.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 	if err != nil{
-		return service.SendError(c,500,err.Error());
+		return service.SendError(c,500,err.Error() + "over here product");
 	}
 
 	var productImages = insert.ProductImages
@@ -178,7 +178,7 @@ func AdminProductCreate(c *fiber.Ctx) error{
 		fmt.Println(productImages[i]);
 		err = productImages[i].Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 		if err != nil{
-			return service.SendError(c,500,err.Error());
+			return service.SendError(c,500,err.Error()+"over here productImgs");
 		}
 	}
 
@@ -262,8 +262,9 @@ func AdminProductUpdate(c *fiber.Ctx) error{
 		//iterate through images and start inserting one by one image
 		for i := range images{
 			images[i].ProductID = update.ProductID;
+			fmt.Println(images[i]);
 			if err := images[i].Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
-				return service.SendError(c,500,err.Error());
+				return service.SendError(c,500,err.Error()+"đây chính là lỗi");
 			}
 		}
 	}

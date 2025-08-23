@@ -23,44 +23,44 @@ import (
 
 // ProductImage is an object representing the database table.
 type ProductImage struct {
-	ProdutImageID int    `boil:"produtImageID" json:"produtImageID" toml:"produtImageID" yaml:"produtImageID"`
-	Image         string `boil:"image" json:"image" toml:"image" yaml:"image"`
-	ProductID     int    `boil:"productID" json:"productID" toml:"productID" yaml:"productID"`
+	ProductImageID int    `boil:"productImageID" json:"productImageID" toml:"productImageID" yaml:"productImageID"`
+	Image          string `boil:"image" json:"image" toml:"image" yaml:"image"`
+	ProductID      int    `boil:"productID" json:"productID" toml:"productID" yaml:"productID"`
 
 	R *productImageR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L productImageL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var ProductImageColumns = struct {
-	ProdutImageID string
-	Image         string
-	ProductID     string
+	ProductImageID string
+	Image          string
+	ProductID      string
 }{
-	ProdutImageID: "produtImageID",
-	Image:         "image",
-	ProductID:     "productID",
+	ProductImageID: "productImageID",
+	Image:          "image",
+	ProductID:      "productID",
 }
 
 var ProductImageTableColumns = struct {
-	ProdutImageID string
-	Image         string
-	ProductID     string
+	ProductImageID string
+	Image          string
+	ProductID      string
 }{
-	ProdutImageID: "product_images.produtImageID",
-	Image:         "product_images.image",
-	ProductID:     "product_images.productID",
+	ProductImageID: "product_images.productImageID",
+	Image:          "product_images.image",
+	ProductID:      "product_images.productID",
 }
 
 // Generated where
 
 var ProductImageWhere = struct {
-	ProdutImageID whereHelperint
-	Image         whereHelperstring
-	ProductID     whereHelperint
+	ProductImageID whereHelperint
+	Image          whereHelperstring
+	ProductID      whereHelperint
 }{
-	ProdutImageID: whereHelperint{field: "\"product_images\".\"produtImageID\""},
-	Image:         whereHelperstring{field: "\"product_images\".\"image\""},
-	ProductID:     whereHelperint{field: "\"product_images\".\"productID\""},
+	ProductImageID: whereHelperint{field: "\"product_images\".\"productImageID\""},
+	Image:          whereHelperstring{field: "\"product_images\".\"image\""},
+	ProductID:      whereHelperint{field: "\"product_images\".\"productID\""},
 }
 
 // ProductImageRels is where relationship names are stored.
@@ -91,11 +91,11 @@ func (r *productImageR) GetProductIDProduct() *Product {
 type productImageL struct{}
 
 var (
-	productImageAllColumns            = []string{"produtImageID", "image", "productID"}
+	productImageAllColumns            = []string{"productImageID", "image", "productID"}
 	productImageColumnsWithoutDefault = []string{"image", "productID"}
-	productImageColumnsWithDefault    = []string{"produtImageID"}
-	productImagePrimaryKeyColumns     = []string{"produtImageID"}
-	productImageGeneratedColumns      = []string{"produtImageID"}
+	productImageColumnsWithDefault    = []string{"productImageID"}
+	productImagePrimaryKeyColumns     = []string{"productImageID"}
+	productImageGeneratedColumns      = []string{}
 )
 
 type (
@@ -550,7 +550,7 @@ func (o *ProductImage) SetProductIDProduct(ctx context.Context, exec boil.Contex
 		strmangle.SetParamNames("\"", "\"", 1, []string{"productID"}),
 		strmangle.WhereClause("\"", "\"", 2, productImagePrimaryKeyColumns),
 	)
-	values := []interface{}{related.ProductID, o.ProdutImageID}
+	values := []interface{}{related.ProductID, o.ProductImageID}
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -594,7 +594,7 @@ func ProductImages(mods ...qm.QueryMod) productImageQuery {
 
 // FindProductImage retrieves a single record by ID with an executor.
 // If selectCols is empty Find will return all columns.
-func FindProductImage(ctx context.Context, exec boil.ContextExecutor, produtImageID int, selectCols ...string) (*ProductImage, error) {
+func FindProductImage(ctx context.Context, exec boil.ContextExecutor, productImageID int, selectCols ...string) (*ProductImage, error) {
 	productImageObj := &ProductImage{}
 
 	sel := "*"
@@ -602,10 +602,10 @@ func FindProductImage(ctx context.Context, exec boil.ContextExecutor, produtImag
 		sel = strings.Join(strmangle.IdentQuoteSlice(dialect.LQ, dialect.RQ, selectCols), ",")
 	}
 	query := fmt.Sprintf(
-		"select %s from \"product_images\" where \"produtImageID\"=$1", sel,
+		"select %s from \"product_images\" where \"productImageID\"=$1", sel,
 	)
 
-	q := queries.Raw(query, produtImageID)
+	q := queries.Raw(query, productImageID)
 
 	err := q.Bind(ctx, exec, productImageObj)
 	if err != nil {
@@ -649,7 +649,6 @@ func (o *ProductImage) Insert(ctx context.Context, exec boil.ContextExecutor, co
 			productImageColumnsWithoutDefault,
 			nzDefaults,
 		)
-		wl = strmangle.SetComplement(wl, productImageGeneratedColumns)
 
 		cache.valueMapping, err = queries.BindMapping(productImageType, productImageMapping, wl)
 		if err != nil {
@@ -720,7 +719,6 @@ func (o *ProductImage) Update(ctx context.Context, exec boil.ContextExecutor, co
 			productImageAllColumns,
 			productImagePrimaryKeyColumns,
 		)
-		wl = strmangle.SetComplement(wl, productImageGeneratedColumns)
 
 		if !columns.IsWhitelist() {
 			wl = strmangle.SetComplement(wl, []string{"created_at"})
@@ -891,9 +889,6 @@ func (o *ProductImage) Upsert(ctx context.Context, exec boil.ContextExecutor, up
 			productImagePrimaryKeyColumns,
 		)
 
-		insert = strmangle.SetComplement(insert, productImageGeneratedColumns)
-		update = strmangle.SetComplement(update, productImageGeneratedColumns)
-
 		if updateOnConflict && len(update) == 0 {
 			return errors.New("models: unable to upsert product_images, could not build update column list")
 		}
@@ -968,7 +963,7 @@ func (o *ProductImage) Delete(ctx context.Context, exec boil.ContextExecutor) (i
 	}
 
 	args := queries.ValuesFromMapping(reflect.Indirect(reflect.ValueOf(o)), productImagePrimaryKeyMapping)
-	sql := "DELETE FROM \"product_images\" WHERE \"produtImageID\"=$1"
+	sql := "DELETE FROM \"product_images\" WHERE \"productImageID\"=$1"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
@@ -1065,7 +1060,7 @@ func (o ProductImageSlice) DeleteAll(ctx context.Context, exec boil.ContextExecu
 // Reload refetches the object from the database
 // using the primary keys with an executor.
 func (o *ProductImage) Reload(ctx context.Context, exec boil.ContextExecutor) error {
-	ret, err := FindProductImage(ctx, exec, o.ProdutImageID)
+	ret, err := FindProductImage(ctx, exec, o.ProductImageID)
 	if err != nil {
 		return err
 	}
@@ -1104,16 +1099,16 @@ func (o *ProductImageSlice) ReloadAll(ctx context.Context, exec boil.ContextExec
 }
 
 // ProductImageExists checks if the ProductImage row exists.
-func ProductImageExists(ctx context.Context, exec boil.ContextExecutor, produtImageID int) (bool, error) {
+func ProductImageExists(ctx context.Context, exec boil.ContextExecutor, productImageID int) (bool, error) {
 	var exists bool
-	sql := "select exists(select 1 from \"product_images\" where \"produtImageID\"=$1 limit 1)"
+	sql := "select exists(select 1 from \"product_images\" where \"productImageID\"=$1 limit 1)"
 
 	if boil.IsDebug(ctx) {
 		writer := boil.DebugWriterFrom(ctx)
 		fmt.Fprintln(writer, sql)
-		fmt.Fprintln(writer, produtImageID)
+		fmt.Fprintln(writer, productImageID)
 	}
-	row := exec.QueryRowContext(ctx, sql, produtImageID)
+	row := exec.QueryRowContext(ctx, sql, productImageID)
 
 	err := row.Scan(&exists)
 	if err != nil {
@@ -1125,5 +1120,5 @@ func ProductImageExists(ctx context.Context, exec boil.ContextExecutor, produtIm
 
 // Exists checks if the ProductImage row exists.
 func (o *ProductImage) Exists(ctx context.Context, exec boil.ContextExecutor) (bool, error) {
-	return ProductImageExists(ctx, exec, o.ProdutImageID)
+	return ProductImageExists(ctx, exec, o.ProductImageID)
 }
