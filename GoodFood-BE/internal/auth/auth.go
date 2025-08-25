@@ -4,29 +4,33 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var secretKey = []byte("secret-key")
+//Used to sign token and verify token
+var secretKey = []byte(os.Getenv("JWT_SECRET"))
 
-//Struct chứa thông tin trong JWT
+//Struct that stores info in JWT
+//Username is to save into c.Locals(). SessionID is to differentiate the logged in users 
 type Claims struct{
 	Username string `json:"username"`
 	SessionID string `json:"sessionID"`
 	jwt.RegisteredClaims
 }
 
+//SessionID generation is for differentiating the logged in users
 func generateSessionID() string{
 	bytes := make([]byte,16)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
 
-//used to create accessToken (expires in 15mins) and refreshToken (expires in 7 days)
+//Used to create accessToken (expires in 15mins) and refreshToken (expires in 7 days)
 func CreateToken(username string, sessionID string) (string,string,string,error){
-	//creating sessionID for every login session
+	//Creating sessionID for every login session
 	if sessionID == ""{
 		sessionID = generateSessionID();
 	}
@@ -35,7 +39,7 @@ func CreateToken(username string, sessionID string) (string,string,string,error)
 	accessTokenClaims := Claims{
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt: jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -63,7 +67,7 @@ func CreateToken(username string, sessionID string) (string,string,string,error)
 	return accessTokenString, refreshTokenString,sessionID, nil
 }
 
-//Xác thực token và trả về Claims nếu hợp lệ
+//Verify token and return struct Claims if token is valid
 func VerifyToken(tokenString string) (*Claims, error){
 	token, err := jwt.ParseWithClaims(tokenString,&Claims{}, func(token *jwt.Token) (interface{}, error){
 		return secretKey, nil

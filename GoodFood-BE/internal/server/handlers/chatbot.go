@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -183,66 +184,112 @@ func get_top_product (c *fiber.Ctx) error{
 	})
 }
 
-func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod string) error{
-	carts := []CartDetailResponse{}
+
+// This function handles user order placement logic.
+// It validates authentication, retrieves user/address info, 
+// fetches product details concurrently, and builds the cart.
+// Returns a JSON response with order summary or error message.
+func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod string) error {
+	var (
+		wg     sync.WaitGroup
+		mu     sync.Mutex
+		carts  []CartDetailResponse
+	)
+
+	//Validate authentication
 	username := auth.GetAuthenticatedUser(c)
 	if username == "" {
 		return service.SendError(c, 401, "User not authenticated")
 	}
-	user, err := models.Accounts(qm.Where("username = ?",username)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	user, err := models.Accounts(qm.Where("username = ?", username)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	//address fetching logic
-	address, err := models.Addresses(qm.Where("\"accountID\" = ? AND status = true",user.AccountID)).One(c.Context(),boil.GetContextDB());
-	if err == sql.ErrNoRows{
-			question := "The user wanted to place an order but they didn't have a delivery address. Politely asked them to add their delivery address first at Account > Delivery Address"
-			resp, err := utils.GiveAnswerForUnreachableData(question,c);
-			if err != nil{
-				return service.SendError(c,500,err.Error());
-			}
-			return c.JSON(fiber.Map{
-				"status":  "Success",
-				"data":    resp,
-				"message": "Fine-tuned model response OK",
-			})
-		}
 
-	//products fetching logic
-	for _,pro := range products{
-		quantity := int(pro["quantity"].(float64));
-		productName := pro["product_name"].(string);
-		product, err := models.Products(qm.Where("\"productName\" ILIKE ?","%"+productName+"%")).One(c.Context(),boil.GetContextDB());
-		if err == sql.ErrNoRows{
-			question := fmt.Sprintf("User wanted to place an order which consists of a product that doesn't exist in the database, specifically they asked for %s",productName)
-			resp, err := utils.GiveAnswerForUnreachableData(question,c);
-			if err != nil{
-				return service.SendError(c,500,err.Error());
-			}
-			return c.JSON(fiber.Map{
-				"status":  "Success",
-				"data":    resp,
-				"message": "Fine-tuned model response OK",
-			})
+	//Fetch delivery address
+	address, err := models.Addresses(qm.Where("\"accountID\" = ? AND status = true", user.AccountID)).One(c.Context(), boil.GetContextDB())
+	if err == sql.ErrNoRows {
+		question := "The user wanted to place an order but they didn't have a delivery address. Politely asked them to add their delivery address first at Account > Delivery Address"
+		resp, err := utils.GiveAnswerForUnreachableData(question, c)
+		if err != nil {
+			return service.SendError(c, 500, err.Error())
 		}
-
-		//inserting product to cart
-		carts = append(carts, CartDetailResponse{
-			CartDetail: models.CartDetail{
-				Quantity: quantity,
-				ProductID: product.ProductID,
-				AccountID: user.AccountID,
-			},
-			Product: product,
+		return c.JSON(fiber.Map{
+			"status":  "Success",
+			"data":    resp,
+			"message": "Fine-tuned model response OK",
 		})
 	}
 
+	//Channel to fetch err/resp from goroutines
+	errChan := make(chan error, len(products))
+	respChan := make(chan fiber.Map, 1)
+
+	//Process products concurrently
+	for _, pro := range products {
+		wg.Add(1)
+		go func(p map[string]interface{}) {
+			defer wg.Done()
+
+			quantity := int(p["quantity"].(float64))
+			productName := p["product_name"].(string)
+			product, err := models.Products(qm.Where("\"productName\" ILIKE ?", "%"+productName+"%")).One(c.Context(), boil.GetContextDB())
+			if err == sql.ErrNoRows {
+				question := fmt.Sprintf("User wanted to place an order which consists of a product that doesn't exist in the database, specifically they asked for %s", productName)
+				resp, innerErr := utils.GiveAnswerForUnreachableData(question, c)
+				if innerErr != nil {
+					errChan <- innerErr
+					return
+				}
+				//Send AI response to main goroutine
+				respChan <- fiber.Map{
+					"status":  "Success",
+					"data":    resp,
+					"message": "Fine-tuned model response OK",
+				}
+				return
+			} else if err != nil {
+				errChan <- err
+				return
+			}
+
+			//Append items to cart safely
+			mu.Lock()
+			carts = append(carts, CartDetailResponse{
+				CartDetail: models.CartDetail{
+					Quantity:  quantity,
+					ProductID: product.ProductID,
+					AccountID: user.AccountID,
+				},
+				Product: product,
+			})
+			mu.Unlock()
+		}(pro)
+	}
+
+	//Wait for all goroutines to finish
+	wg.Wait()
+	close(errChan)
+	close(respChan)
+
+	//priority: if has resp from AI -> return resp
+	if resp, ok := <-respChan; ok{
+		return c.JSON(resp)
+	}
+
+	//return err if there are any
+	for err := range errChan{
+		if err != nil{
+			return service.SendError(c, 500, err.Error())
+		}
+	}
+
 	return c.JSON(fiber.Map{
-		"status":  "Success",
-		"data":    "Your order is ready. Click here!",
-		"carts": carts,
-		"address": address,
+		"status":        "Success",
+		"data":          "Your order is ready. Click here!",
+		"carts":         carts,
+		"address":       address,
 		"paymentMethod": paymentMethod,
-		"message": "Fine-tuned model response OK",
+		"message":       "Fine-tuned model response OK",
 	})
 }

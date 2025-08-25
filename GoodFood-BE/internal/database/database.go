@@ -8,13 +8,12 @@ import (
 	"os"
 	"strconv"
 	"time"
-
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 )
 
-// Service represents a service that interacts with a database.
+// Service interface represents a service that interacts with a database.
 type Service interface {
 	// Health returns a map of health status information.
 	// The keys and values in the map are service-specific.

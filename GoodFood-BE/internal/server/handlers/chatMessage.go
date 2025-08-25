@@ -5,13 +5,20 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 )
 
-var userConnections = make(map[int]*websocket.Conn) // for user
-var adminConnections = make(map[int]*websocket.Conn)
+var(
+	userConnections = make(map[int]*websocket.Conn)
+	adminConnections = make(map[int]*websocket.Conn)
+
+	//Separate mutexes for users and admins to increase performance when reading/writing
+	userConnMutex sync.RWMutex
+	adminConnMutex sync.RWMutex
+)
 
 type ChatMessage struct{
 	FromID int `json:"from_id"`
@@ -30,9 +37,16 @@ func HandleUserWebsocket(c *websocket.Conn){
 		_ = c.Close()
 		return
 	}
+
+	//Mutex lock to avoid race condition because userConnections is not thread-safe.
+	//Not thread-safe means if 2 users or more goroutines shouldn't try to write to the map concurrently
+	userConnMutex.Lock()
 	userConnections[accountID] = c
+	userConnMutex.Unlock()
 	defer func(){
+		userConnMutex.Lock()
 		delete(userConnections, accountID)
+		userConnMutex.Unlock()
 		c.Close()
 	}()
 
@@ -46,10 +60,12 @@ func HandleUserWebsocket(c *websocket.Conn){
 		}
 
 		//Send message to admins
+		adminConnMutex.RLock()
 		for _, adminConn := range adminConnections{
 			fmt.Println(websocket.TextMessage);
 			_ = adminConn.WriteMessage(websocket.TextMessage, msg)
 		}
+		adminConnMutex.RUnlock()
 	}
 
 }
@@ -63,9 +79,15 @@ func HandleAdminWebSocket(c *websocket.Conn){
 		return
 	}
 
+	//Mutex lock to avoid race condition because adminConnections is not thread-safe.
+	//Not thread-safe means if 2 users or more goroutines shouldn't try to write to the map concurrently
+	adminConnMutex.Lock()
 	adminConnections[adminID] = c
+	adminConnMutex.Unlock()
 	defer func(){
+		adminConnMutex.Lock()
 		delete(adminConnections, adminID)
+		adminConnMutex.Unlock()
 		c.Close()
 	}()
 
@@ -83,7 +105,9 @@ func HandleAdminWebSocket(c *websocket.Conn){
 			log.Println("Invalid message from admin: ",err)
 			continue
 		}
-		fmt.Println(payload.Message);
+		
+		//Send to the correct user
+		userConnMutex.RLock()
 		if userConn, ok := userConnections[payload.ToID]; ok{
 			_ = userConn.WriteJSON(fiber.Map{
 				"fromAdmin": adminID,
@@ -91,20 +115,8 @@ func HandleAdminWebSocket(c *websocket.Conn){
 			})
 			fmt.Println("Not okay");
 		}
+		userConnMutex.RUnlock()
 	}
 
-	// for{
-	// 	_, msg, err := c.ReadMessage()
-	// 	if err != nil{
-	// 		log.Printf("User %d disconnected: %v\n",accountID, err)
-	// 		break;
-	// 	}
-
-	// 	//Send message to admins
-	// 	for _, adminConn := range adminConnections{
-	// 		fmt.Println(websocket.TextMessage);
-	// 		_ = adminConn.WriteMessage(websocket.TextMessage, msg)
-	// 	}
-	// }
 }
 

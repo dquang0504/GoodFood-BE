@@ -34,11 +34,11 @@ func InitRedis(){
 	}
 
 	//Get value from redis
-	val,err := Client.Get(Ctx,"test").Result()
+	val,err := Client.Get(Ctx,"foo").Result()
 	if err != nil{
 		log.Fatalf("Lỗi khi get key: %v", err)
 	}
-	fmt.Println("Gía trị của test: ",val)
+	fmt.Println("Test value: ",val)
 }
 
 func GetClient() *redis.Client{

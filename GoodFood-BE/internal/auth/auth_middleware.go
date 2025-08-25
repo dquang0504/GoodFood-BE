@@ -2,15 +2,13 @@ package auth
 
 import (
 	"GoodFood-BE/internal/service"
-	"fmt"
 	"strings"
-
 	"github.com/gofiber/fiber/v2"
 )
 
-//AuthMiddleware verifies access token from header request
+//AuthMiddleware verifies access token from header request. Used for authenticated API requests
 func AuthMiddleware(c *fiber.Ctx) error{
-	//Get token from authorization header
+	//Get scheme along with token from authorization header
 	authHeader := c.Get("Authorization")
 	if authHeader == ""{
 		return service.SendError(c,401,"Missing Authorization header")
@@ -24,7 +22,6 @@ func AuthMiddleware(c *fiber.Ctx) error{
 
 	tokenString := splitToken[1]
 
-	//Verify the token
 	claims,err := VerifyToken(tokenString)
 	if err != nil{
 		return service.SendError(c,401,"Invalid or expired token");
@@ -33,22 +30,21 @@ func AuthMiddleware(c *fiber.Ctx) error{
 	//Save the username into context so that other handlers could use it
 	c.Locals("username",claims.Username)
 
-	//Contintue to handle the request
+
 	return c.Next()
 }
 
 // OptionalAuthMiddleware tries to parse the token if present, else continue without error.
+// Used for ChatBot API endpoint
 func OptionalAuthMiddleware(c *fiber.Ctx) error {
 	authHeader := c.Get("Authorization")
 	if authHeader == "" {
-		fmt.Println("I hate you")
 		return c.Next()
 	}
 
 	// Verifying bearer token format
 	splitToken := strings.Split(authHeader, " ")
 	if len(splitToken) != 2 || splitToken[0] != "Bearer" {
-		// Có Authorization nhưng sai format => vẫn trả lỗi
 		return service.SendError(c, 401, "Invalid Authorization format")
 	}
 

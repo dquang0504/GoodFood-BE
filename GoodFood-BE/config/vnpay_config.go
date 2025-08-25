@@ -2,16 +2,12 @@ package config
 
 import (
 	"crypto/hmac"
-	"crypto/md5"
-	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"os"
 	"sort"
 	"strings"
-	"time"
 )
 
 const (
@@ -27,26 +23,16 @@ const (
 	
 )
 
-//MD5 Hash
-func MD5(message string) string{
-	hash := md5.Sum([]byte(message))
-	return hex.EncodeToString(hash[:])
-}
-
-// SHA256 hash
-func Sha256(message string) string{
-	hash := sha256.Sum256([]byte(message))
-	return hex.EncodeToString(hash[:])
-}
-
-// HMAC SHA512
+// HMAC SHA512 generates a secure hash using a secret key
+//VNPay requires HmacSha512 signatures for request validation
 func HmacSHA512(key, data string) string {
 	h := hmac.New(sha512.New, []byte(key))
 	h.Write([]byte(data))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// HashAllFields: tạo chuỗi query string rồi HMAC SHA512
+// HashAllFields builds a query string from all fields and returns its HmacSha512 signature.
+//VnPAY mandates that all params must be stored and signed to prevent tampering.
 func HashAllFields(fields map[string]string) string {
 	var keys []string
 	for k := range fields {
@@ -66,15 +52,4 @@ func HashAllFields(fields map[string]string) string {
 	}
 
 	return HmacSHA512(os.Getenv("VNPAY_SECRET"), sb.String())
-}
-
-// GetRandomNumber: tạo chuỗi số ngẫu nhiên
-func GetRandomNumber(length int) string {
-	const digits = "0123456789"
-	rand.Seed(time.Now().UnixNano())
-	sb := make([]byte, length)
-	for i := range sb {
-		sb[i] = digits[rand.Intn(len(digits))]
-	}
-	return string(sb)
 }

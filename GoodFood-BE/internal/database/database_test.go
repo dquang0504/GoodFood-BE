@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -13,9 +14,9 @@ import (
 
 func mustStartPostgresContainer() (func(context.Context) error, error) {
 	var (
-		dbName = "database"
-		dbPwd  = "password"
-		dbUser = "user"
+		dbName = os.Getenv("GOODFOOD_DB_DATABASE")
+		dbPwd  = os.Getenv("GOODFOOD_DB_PASSWORD")
+		dbUser = os.Getenv("GOODFOOD_DB_USERNAME")
 	)
 
 	dbContainer, err := postgres.Run(
