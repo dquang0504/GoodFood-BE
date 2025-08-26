@@ -27,7 +27,7 @@ type Invoice struct {
 	InvoiceID       int         `boil:"invoiceID" json:"invoiceID" toml:"invoiceID" yaml:"invoiceID"`
 	ShippingFee     float32     `boil:"shippingFee" json:"shippingFee" toml:"shippingFee" yaml:"shippingFee"`
 	TotalPrice      float32     `boil:"totalPrice" json:"totalPrice" toml:"totalPrice" yaml:"totalPrice"`
-	PaymentDate     time.Time   `boil:"paymentDate" json:"paymentDate" toml:"paymentDate" yaml:"paymentDate"`
+	CreatedAt       time.Time   `boil:"createdAt" json:"createdAt" toml:"createdAt" yaml:"createdAt"`
 	PaymentMethod   bool        `boil:"paymentMethod" json:"paymentMethod" toml:"paymentMethod" yaml:"paymentMethod"`
 	Status          bool        `boil:"status" json:"status" toml:"status" yaml:"status"`
 	Note            null.String `boil:"note" json:"note,omitempty" toml:"note" yaml:"note,omitempty"`
@@ -46,7 +46,7 @@ var InvoiceColumns = struct {
 	InvoiceID       string
 	ShippingFee     string
 	TotalPrice      string
-	PaymentDate     string
+	CreatedAt       string
 	PaymentMethod   string
 	Status          string
 	Note            string
@@ -60,7 +60,7 @@ var InvoiceColumns = struct {
 	InvoiceID:       "invoiceID",
 	ShippingFee:     "shippingFee",
 	TotalPrice:      "totalPrice",
-	PaymentDate:     "paymentDate",
+	CreatedAt:       "createdAt",
 	PaymentMethod:   "paymentMethod",
 	Status:          "status",
 	Note:            "note",
@@ -76,7 +76,7 @@ var InvoiceTableColumns = struct {
 	InvoiceID       string
 	ShippingFee     string
 	TotalPrice      string
-	PaymentDate     string
+	CreatedAt       string
 	PaymentMethod   string
 	Status          string
 	Note            string
@@ -90,7 +90,7 @@ var InvoiceTableColumns = struct {
 	InvoiceID:       "invoice.invoiceID",
 	ShippingFee:     "invoice.shippingFee",
 	TotalPrice:      "invoice.totalPrice",
-	PaymentDate:     "invoice.paymentDate",
+	CreatedAt:       "invoice.createdAt",
 	PaymentMethod:   "invoice.paymentMethod",
 	Status:          "invoice.status",
 	Note:            "invoice.note",
@@ -158,7 +158,7 @@ var InvoiceWhere = struct {
 	InvoiceID       whereHelperint
 	ShippingFee     whereHelperfloat32
 	TotalPrice      whereHelperfloat32
-	PaymentDate     whereHelpertime_Time
+	CreatedAt       whereHelpertime_Time
 	PaymentMethod   whereHelperbool
 	Status          whereHelperbool
 	Note            whereHelpernull_String
@@ -172,7 +172,7 @@ var InvoiceWhere = struct {
 	InvoiceID:       whereHelperint{field: "\"invoice\".\"invoiceID\""},
 	ShippingFee:     whereHelperfloat32{field: "\"invoice\".\"shippingFee\""},
 	TotalPrice:      whereHelperfloat32{field: "\"invoice\".\"totalPrice\""},
-	PaymentDate:     whereHelpertime_Time{field: "\"invoice\".\"paymentDate\""},
+	CreatedAt:       whereHelpertime_Time{field: "\"invoice\".\"createdAt\""},
 	PaymentMethod:   whereHelperbool{field: "\"invoice\".\"paymentMethod\""},
 	Status:          whereHelperbool{field: "\"invoice\".\"status\""},
 	Note:            whereHelpernull_String{field: "\"invoice\".\"note\""},
@@ -252,8 +252,8 @@ func (r *invoiceR) GetInvoiceIDTransactions() TransactionSlice {
 type invoiceL struct{}
 
 var (
-	invoiceAllColumns            = []string{"invoiceID", "shippingFee", "totalPrice", "paymentDate", "paymentMethod", "status", "note", "cancelReason", "receiveAddress", "receiveName", "receivePhone", "accountID", "invoiceStatusID"}
-	invoiceColumnsWithoutDefault = []string{"shippingFee", "totalPrice", "paymentDate", "paymentMethod", "status", "receiveAddress", "receiveName", "receivePhone", "accountID", "invoiceStatusID"}
+	invoiceAllColumns            = []string{"invoiceID", "shippingFee", "totalPrice", "createdAt", "paymentMethod", "status", "note", "cancelReason", "receiveAddress", "receiveName", "receivePhone", "accountID", "invoiceStatusID"}
+	invoiceColumnsWithoutDefault = []string{"shippingFee", "totalPrice", "createdAt", "paymentMethod", "status", "receiveAddress", "receiveName", "receivePhone", "accountID", "invoiceStatusID"}
 	invoiceColumnsWithDefault    = []string{"invoiceID", "note", "cancelReason"}
 	invoicePrimaryKeyColumns     = []string{"invoiceID"}
 	invoiceGeneratedColumns      = []string{"invoiceID"}

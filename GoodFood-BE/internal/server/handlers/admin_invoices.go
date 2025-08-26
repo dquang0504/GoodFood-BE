@@ -1,132 +1,62 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-
 	"math"
-	"time"
-
 	"github.com/gofiber/fiber/v2"
-	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
-type InvoiceCards struct{
-	TotalInvoice int `boil:"total"`
-	TotalCanceled int `boil:"canceled"`
-}
-
-type InvoiceResponse struct{
-	models.Invoice
-	InvoiceStatus *models.InvoiceStatus `json:"invoiceStatus"`
-	Product *models.Product `json:"product"`
-}
-
+//GetAdminInvoice fetches invoices with filters, pagination, and summary metrics.
+//Has a filter processing logic and returns the final list of data with pagination.
 func GetAdminInvoice(c *fiber.Ctx) error{
-	var cards InvoiceCards
-	err := queries.Raw(`
-		SELECT COALESCE(COUNT("invoiceID"),0) AS total,
-		COUNT(CASE WHEN "invoiceStatusID" = 6 THEN 1 END) AS canceled
-		FROM invoice
-	`).Bind(c.Context(),boil.GetContextDB(),&cards)
+	//Fetch metrics for InvoiceCards
+	cards, err := utils.FetchInvoiceCards(c);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
-	//Fetching page number
+	//Fetch query params
 	page := c.QueryInt("page",0);
 	if page == 0{
 		return service.SendError(c,401,"Did not receive page");
 	}
-	//Fetching sort and search
 	sort := c.Query("sort","");
 	search := c.Query("search","")
-	//Fetching dateFrom and dateTo
-	ngayFromStr := c.Query("dateFrom", "")
-	ngayToStr := c.Query("dateTo", "")
-
-	// --- Parse dates ---
-	var ngayFrom, ngayTo time.Time
-	var errTime error
-	if ngayFromStr != "" {
-		ngayFrom, errTime = time.Parse("2006-01-02", ngayFromStr)
-		if errTime != nil {
-			return service.SendError(c, 400, "Invalid format for ngayFrom (expect yyyy-mm-dd)")
-		}
-	}
-	if ngayToStr != "" {
-		ngayTo, errTime = time.Parse("2006-01-02", ngayToStr)
-		if errTime != nil {
-			return service.SendError(c, 400, "Invalid format for ngayTo (expect yyyy-mm-dd)")
-		}
+	dateFrom, dateTo, err := utils.ParseDateRange(c.Query("dateFrom", ""), c.Query("dateTo", ""));
+	if err != nil{
+		return service.SendError(c,400,err.Error());
 	}
 
-	//calculating offset
-	offset := (page-1)*6;
-
-	//creating query mod
-	queryMods := []qm.QueryMod{
-		qm.Load(models.InvoiceRels.InvoiceStatusIDInvoiceStatus),
-		qm.OrderBy("\"invoiceID\" DESC"),
+	//Build query modifiers (both for fetching data and counting)
+	queryMods, queryModsTotal, err := utils.BuildInvoiceFilters(c,search,sort,dateFrom,dateTo);
+	if err != nil{
+		return service.SendError(c,500, err.Error());
 	}
 
-	// ==> Before adding qm.Limit and qm.Offset, create queryModsTotal
-	queryModsTotal := []qm.QueryMod{}
-
-	// handling search and sort filter and filling queryMods
-	if search != "" {
-		switch sort {
-		case "Invoice ID":
-			queryMods = append(queryMods, qm.Where("CAST(\"invoiceID\" AS TEXT) ILIKE ?", "%"+search+"%"))
-			queryModsTotal = append(queryModsTotal, qm.Where("CAST(\"invoiceID\" AS TEXT) ILIKE ?", "%"+search+"%"))
-		case "Customer name":
-			queryMods = append(queryMods, qm.Where("\"receiveName\" ILIKE ?", "%"+search+"%"))
-			queryModsTotal = append(queryModsTotal, qm.Where("\"receiveName\" ILIKE ?", "%"+search+"%"))
-		case "Invoice status":
-			status, err := models.InvoiceStatuses(qm.Where("\"statusName\" ILIKE ?", "%"+search+"%")).One(c.Context(), boil.GetContextDB())
-			if err != nil {
-				return service.SendError(c, 500, err.Error())
-			}
-			queryMods = append(queryMods, qm.Where("\"invoiceStatusID\" = ?", status.InvoiceStatusID))
-			queryModsTotal = append(queryModsTotal, qm.Where("\"invoiceStatusID\" = ?", status.InvoiceStatusID))
-		default:
-			// fallback
-		}
-	} else if sort == "Payment date" && !ngayFrom.IsZero() && !ngayTo.IsZero() && ngayFrom.Before(ngayTo) {
-		queryMods = append(queryMods, qm.Where("DATE(\"paymentDate\") BETWEEN ? AND ?", ngayFrom, ngayTo))
-		queryModsTotal = append(queryModsTotal, qm.Where("DATE(\"paymentDate\") BETWEEN ? AND ?", ngayFrom, ngayTo))
-	}
-
-	// Count total invoices matching filter
+	// Count total invoices that match queryModsTotal
 	totalInvoice, err := models.Invoices(queryModsTotal...).Count(c.Context(), boil.GetContextDB())
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
-
-	// Tính lại totalPage
 	totalPage := int(math.Ceil(float64(totalInvoice) / float64(6)))
 
-	queryMods = append(queryMods, qm.Limit(6))
-	queryMods = append(queryMods,qm.Offset(offset))
+	//Add pagination
+	offset := (page-1)*6;
+	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset))
 
-	invoices,err := models.Invoices(
-		queryMods...
-	).All(c.Context(),boil.GetContextDB());
+	//Fetch invoices with queryMods
+	invoices,err := models.Invoices(queryMods...).All(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
-	// Converting data into custom struct that has invoice, invoice details and its statuses
-	response := make([]InvoiceResponse, len(invoices))
-	for i, invoice := range invoices {
-		response[i] = InvoiceResponse{
-			Invoice: *invoice,
-			InvoiceStatus: invoice.R.InvoiceStatusIDInvoiceStatus,
-		}
-	}
+	// Converting to response format
+	response := utils.MapInvoices(invoices);
 
 	resp := fiber.Map{
 		"status": "Success",
@@ -139,95 +69,44 @@ func GetAdminInvoice(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
-type InvoiceDetailResponse struct{
-	InvoiceDetailID int     `boil:"invoiceDetailID"`
-	InvoiceID       int     `boil:"invoiceID"`
-	ProductID       int     `boil:"productID"`
-	Price           float64 `boil:"price"`
-	Quantity        int     `boil:"quantity"`
-
-	ProductName string `boil:"food"`
-	ReceiveName string `boil:"name"`
-	ReceivePhone string `boil:"phone"`
-	ReceiveAddress string `boil:"address"`
-}
-
+// GetAdminInvoiceDetail fetches invoice detail data including invoice status progression and detailed line items.
 func GetAdminInvoiceDetail(c *fiber.Ctx) error{
-
 	invoiceID := c.QueryInt("invoiceID",0);
 	if invoiceID == 0{
 		return service.SendError(c,400,"Did not receive invoiceID");
 	}
 
-	//get invoice first
-	fetchInvoice, err := models.Invoices(
-		qm.Where("\"invoiceID\" = ?",invoiceID),
-	).One(c.Context(),boil.GetContextDB());
+	//Load invoice and current status
+	invoice,status, err := utils.FetchInvoiceAndStatus(c,invoiceID);
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
+	}
+
+	//Determine possible status progression
+	statusList, err := utils.FetchStatusProgression(c,status);
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
+	}
+
+	//Load invoice detail lines with joins
+	details, err := utils.FetchInvoiceDetails(c, invoice.InvoiceID);
 	if err != nil{
 		return service.SendError(c,500,err.Error())
-	}
-	//then get its status
-	fetchStatus, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?",fetchInvoice.InvoiceStatusID)).One(c.Context(),boil.GetContextDB())
-	if err != nil{
-		return service.SendError(c,500,err.Error())
-	}
-
-	queryMods := []qm.QueryMod{}
-
-	switch(fetchStatus.StatusName){
-		case "Order Placed":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Cancelled","Order Confirmed"))
-		case "Order Confirmed":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Order Processing"))
-		case "Order Processing":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Shipping"))
-		case "Shipping":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",fetchStatus.StatusName,"Delivered"))
-		case "Delivered":
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ?",fetchStatus.StatusName))
-		default:
-			//do nothing in fallback
-	}
-
-	listStatus,err := models.InvoiceStatuses(queryMods...).All(c.Context(),boil.GetContextDB())
-	if err != nil{
-		return service.SendError(c,500,err.Error())
-	}
-
-	//finally getting its details
-	var listInvoiceDetails []InvoiceDetailResponse
-	err2 := queries.Raw(`
-		SELECT invoice_detail.*,
-		product."productName" as food,
-		invoice."receiveName" AS name, 
-		invoice."receivePhone" AS phone, 
-		invoice."receiveAddress" AS address
-		FROM invoice 
-		INNER JOIN invoice_detail ON invoice."invoiceID" = invoice_detail."invoiceID"
-		INNER JOIN product ON invoice_detail."productID" = product."productID"
-		WHERE invoice_detail."invoiceID" = $1
-	`,fetchInvoice.InvoiceID).Bind(c.Context(),boil.GetContextDB(),&listInvoiceDetails);
-	if err2 != nil{
-		return service.SendError(c,500,err2.Error())
 	}
 	
 	resp := fiber.Map{
 		"status": "Success",
-		"listStatus": listStatus,
-		"listInvoiceDetails": listInvoiceDetails,
+		"listStatus": statusList,
+		"listInvoiceDetails": details,
 		"message": "Successfully fetched invoice detail values",
 	}
 
 	return c.JSON(resp);
 }
 
-type UpdateInvoiceStruct struct{
-	StatusName string `json:"statusName"`
-	CancelReason null.String `json:"cancelReason"`
-}
-
+// UpdateInvoice updates an invoice's status and returns the updateđ invocie.
 func UpdateInvoice(c *fiber.Ctx) error{
-	var status UpdateInvoiceStruct
+	var status dto.UpdateInvoiceStruct
 
 	invoiceID := c.QueryInt("invoiceID",0);
 	if invoiceID == 0{
@@ -237,33 +116,7 @@ func UpdateInvoice(c *fiber.Ctx) error{
 		return service.SendError(c,400,"Invalid body!");
 	}
 
-	invoiceStatus, err := models.InvoiceStatuses(qm.Where("\"statusName\" LIKE ?",status.StatusName)).One(c.Context(),boil.GetContextDB())
-	if err != nil{
-		return service.SendError(c,500,err.Error())
-	}
-
-	getInvoice,err := models.Invoices(
-		qm.Where("\"invoiceID\" = ?",invoiceID),
-	).One(c.Context(),boil.GetContextDB())
-	if err != nil{
-		return service.SendError(c,500,err.Error())
-	}
-
-	if getInvoice.InvoiceStatusID != invoiceStatus.InvoiceStatusID && invoiceStatus.InvoiceStatusID != 6{
-		getInvoice.InvoiceStatusID += 1
-	}
-
-	if invoiceStatus.InvoiceStatusID == 5{
-		getInvoice.InvoiceStatusID = 5
-		getInvoice.Status = true;
-	}
-
-	if invoiceStatus.InvoiceStatusID == 6{
-		getInvoice.InvoiceStatusID = 6
-		getInvoice.CancelReason = status.CancelReason
-	}
-		
-	_,err = getInvoice.Update(c.Context(),boil.GetContextDB(),boil.Infer())
+	getInvoice, err := utils.UpdateInvoiceStatus(c,invoiceID,status);
 	if err != nil{
 		return service.SendError(c,500,err.Error())
 	}
