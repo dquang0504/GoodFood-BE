@@ -85,7 +85,7 @@ type ProductTypeError struct {
 	ErrTypeName string `json:"errTypeName"`
 }
 
-func AdminProductTypeCreate(c *fiber.Ctx) error {
+func AdminProductTypeCreate(c *fiber.Ctx,) error {
 	var pt models.ProductType
 	if err := c.BodyParser(&pt); err != nil {
 		return service.SendError(c, 400, "Invalid body")

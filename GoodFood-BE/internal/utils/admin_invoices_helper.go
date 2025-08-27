@@ -179,12 +179,13 @@ func UpdateInvoiceStatus(c *fiber.Ctx, invoiceID int, status dto.UpdateInvoiceSt
 	if invoice.InvoiceStatusID != invoiceStatus.InvoiceStatusID && invoiceStatus.InvoiceStatusID != 6{
 		invoice.InvoiceStatusID += 1
 	}
-
+	//invoiceStatusID reaches 5 meaning the order has been delivered, meaning invoice status is paid.
 	if invoiceStatus.InvoiceStatusID == 5{
 		invoice.InvoiceStatusID = 5
 		invoice.Status = true;
 	}
-
+	//invoiceStatusID reaches 6 meaning the order has been cancelled, also sends an email clarifying the
+	//cancelation
 	if invoiceStatus.InvoiceStatusID == 6{
 		invoice.InvoiceStatusID = 6
 		invoice.CancelReason = status.CancelReason
