@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
@@ -329,7 +330,7 @@ type Star struct{
 type ProductDetailResponse struct{
 	models.Product `json:"product"`
 	ProductImages models.ProductImageSlice `json:"productImages"`
-	FiveStarsReview []ReviewResponse `json:"review"`
+	FiveStarsReview []dto.ReviewResponse `json:"review"`
 	Stars Star `json:"stars"`
 }
 func GetDetail(c *fiber.Ctx) error{
@@ -401,7 +402,7 @@ func GetDetail(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
-func reviewDisplay(ctx context.Context,id int, filter string, offset int) (reviews []ReviewResponse,error error, totalPage int){
+func reviewDisplay(ctx context.Context,id int, filter string, offset int) (reviews []dto.ReviewResponse,error error, totalPage int){
 	queries := []qm.QueryMod{}
 	queries = append(queries, qm.Where("\"productID\" = ?",id))
 
@@ -436,9 +437,9 @@ func reviewDisplay(ctx context.Context,id int, filter string, offset int) (revie
 		return nil,err,totalPage
 	}
 	
-	reviewResult := make([]ReviewResponse,len(review));
+	reviewResult := make([]dto.ReviewResponse,len(review));
 	for i, r := range review{
-		reviewResult[i] = ReviewResponse{
+		reviewResult[i] = dto.ReviewResponse{
 			Review: *r,
 			ReviewAccount: *r.R.AccountIDAccount,
 			ReviewProduct: *r.R.ProductIDProduct,

@@ -1,130 +1,58 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"encoding/json"
 	"fmt"
 	"math"
-	"strconv"
-	"strings"
 	"time"
-
-	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
-type ReviewCards struct{
-	TotalReview int `boil:"total_review"`
-	Total5S int `boil:"total_5s"`
-}
-type ReviewResponse struct{
-	models.Review
-	ReviewAccount models.Account `json:"reviewAccount"`
-	ReviewProduct models.Product `json:"reviewProduct"`
-	ReviewImages models.ReviewImageSlice `json:"reviewImages"`
-	ReviewReply models.ReplySlice `json:"reviewReply"`
-	ReviewInvoice models.Invoice `json:"reviewInvoice"`
-}
-
-// Define a struct to hold the response data
-type ClauseAnalysis struct {
-    Clause    string `json:"clause"`
-    Sentiment string `json:"sentiment"`
-}
-
-type AnalyzeResult struct {
-	ReviewID int 			  `json:"reviewID"`
-    Review   string           `json:"review"`
-    Clauses  []string         `json:"clauses"`
-    Analysis []ClauseAnalysis `json:"analysis"`
-    Summary  string           `json:"summary"`
-}
-
+//GetAdminReview fetches paginated list of reviews from DB, also sending the list over to microservice flask for sentiment analysis then cache into redis.
+//Returns the paginated list along with sentiment analysis results.
 func GetAdminReview(c *fiber.Ctx) error{
-	//establishing connection to python backend
-	client := resty.New()
-	var cards ReviewCards
-	err := queries.Raw(`
-		SELECT COALESCE(COUNT(*),0) AS total_review,
-		COUNT(CASE WHEN stars = 5 THEN 1 END) AS total_5s
-		FROM review
-	`).Bind(c.Context(),boil.GetContextDB(),&cards);
-	if err != nil{
-		return service.SendError(c,500,err.Error());
-	}
 
+	//Fetch & parse query params
 	page := c.QueryInt("page",0);
 	if page == 0{
 		return service.SendError(c,401,"Did not receive page");
 	}
-	sort := c.Query("sort","Tên sản phẩm");
+	sort := c.Query("sort","Product Name");
 	search := c.Query("search","");
-	offset := (page-1)*6;
-	ngayFromStr := c.Query("ngayFrom","");
-	ngayToStr := c.Query("ngayTo","");
-	//parsing dates
-	var ngayFrom,ngayTo time.Time
-	var errTime error
-	if ngayFromStr != ""{
-		ngayFrom, errTime = time.Parse("2006-01-02",ngayFromStr);
-		if errTime != nil {
-			return service.SendError(c, 400, "Invalid format for ngayFrom (expect yyyy-mm-dd)")
-		}
-	}
-	if ngayToStr != ""{
-		ngayTo, errTime = time.Parse("2006-01-02",ngayToStr);
-		if errTime != nil {
-			return service.SendError(c, 400, "Invalid format for ngayTo (expect yyyy-mm-dd)")
-		}
+	offset := (page-1) * utils.PageSize;
+	dateFrom, dateTo, err := utils.ParseDateRange(c.Query("dateFrom", ""), c.Query("dateTo", ""));
+	if err != nil{
+		return service.SendError(c,400,err.Error());
 	}
 
-	//creating redisKey for review list
-	redisKey := fmt.Sprintf("review:list:page=%d:sort=%s:search=%s:ngayFrom=%s:ngayTo=%s",page,sort,search,ngayFrom,ngayTo)
-	//fetching redis key
+	//Redis cache
+	redisKey := fmt.Sprintf("review:list:page=%d:sort=%s:search=%s:ngayFrom=%s:ngayTo=%s",page,sort,search,dateFrom,dateTo)
+	//Fetch redis key
 	cachedReview, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
 	if err == nil{
 		return c.JSON(json.RawMessage(cachedReview))
 	}
 
-	queryMods := []qm.QueryMod{}
-
-	if search != ""{
-		switch sort{
-			case "Product Name":
-				//could return multiple products with a similar name
-				product, err := models.Products(qm.Where("\"productName\" ILIKE ?","%"+search+"%")).All(c.Context(),boil.GetContextDB());
-				if err != nil{
-					return service.SendError(c,500,err.Error());
-				}
-				//appending the product ids into an int slice
-				ids := []int{}
-				for _, p := range product{
-					ids = append(ids, p.ProductID)
-				}
-				if len(ids) > 0 {
-					fmt.Println(ids)
-					queryMods = append(queryMods, qm.WhereIn("\"productID\" in ?", convertIntSliceToInterface(ids)...))
-				}
-			case "Stars":
-				intSearch, err := strconv.Atoi(search)
-				if err != nil{
-					return service.SendError(c,400, err.Error())
-				}
-				queryMods = append(queryMods, qm.Where("stars = ?",intSearch))
-			case "Comment":
-				queryMods = append(queryMods, qm.Where("\"comment\" ILIKE ?","%"+search+"%"))
-			default:
-				fmt.Println("Do nothing in fallback")
-			}	
-	}else if sort == "Review Date" && ngayFrom.Before(ngayTo){
-		queryMods = append(queryMods, qm.Where("DATE(\"reviewDate\") BETWEEN ? AND ?",ngayFrom,ngayTo));
+	// Fetch cards
+	cards, err := utils.FetchReviewCards(c)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
+	//Build filters
+	queryMods, err := utils.BuildReviewFilters(c, sort, search, dateFrom, dateTo)
+	if err != nil {
+		return service.SendError(c, 400, err.Error())
+	}
+
+	//Count & paginate
 	totalReviews, err := models.Reviews(queryMods...).Count(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
@@ -137,30 +65,22 @@ func GetAdminReview(c *fiber.Ctx) error{
 		return service.SendError(c,500, err.Error());
 	}
 
-	//sending review list to python backend for sentiment analysis
-	//getting comments from review list
-	comments := []string{}
-	for _, c := range reviews{
-		comments = append(comments, c.Comment)
+	//Analyze reviews
+	comments := make([]string, len(reviews))
+	reviewIDs := make([]int, len(reviews))
+	for i, r := range reviews {
+		comments[i] = r.Comment
+		reviewIDs[i] = r.ReviewID
 	}
-	reviewIDs := []int{}
-	for _,c := range reviews{
-		reviewIDs = append(reviewIDs, c.ReviewID)
-	}
-
-	result := []AnalyzeResult{}
-	_, err = client.R().
-		SetHeader("Content-Type","application/json").
-		SetBody(map[string]interface{}{"review": comments, "reviewID": reviewIDs}).
-		SetResult(&result).
-		Post("http://192.168.240.1:5000/analyze")
-	if err != nil{
-		return service.SendError(c,500,err.Error())
+	analysisResult, err := utils.AnalyzeReviews(comments, reviewIDs)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
-	response := make([]ReviewResponse,len(reviews));
+	//Build response
+	response := make([]dto.ReviewResponse,len(reviews));
 	for i, r := range reviews{
-		response[i] = ReviewResponse{
+		response[i] = dto.ReviewResponse{
 			Review: *r,
 			ReviewAccount: *r.R.AccountIDAccount,
 			ReviewProduct: *r.R.ProductIDProduct,
@@ -170,12 +90,13 @@ func GetAdminReview(c *fiber.Ctx) error{
 	resp := fiber.Map{
 		"status": "Success",
 		"data": response,
-		"result": result,
+		"result": analysisResult,
 		"cards": cards,
 		"totalPage": totalPage, 
 		"message": "Successfully fetched review values!",
 	}
 
+	//Cache response
 	savingKeyJson, _ := json.Marshal(resp);
 	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10 * 24 * time.Hour)
 	if rdsErr != nil{
@@ -186,60 +107,51 @@ func GetAdminReview(c *fiber.Ctx) error{
 }
 
 func GetAdminReviewAnalysis(c *fiber.Ctx) error{
-	//establishing connection to python backend
-	client := resty.New()
-
+	//Fetch query params
 	page := c.QueryInt("page",0);
 	if page == 0{
 		return service.SendError(c,401,"Did not receive page");
 	}
 	sort := c.Query("sort","Positive Sentiment");
 
+	//Redis cache
 	redisKey := fmt.Sprintf("reviewAnalysis:list:page=%d:sort=%s",page,sort)
-	//fetching redis key
+	//Fetch redis key
 	cachedReviewAnalysis, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
 	if err == nil{
 		return c.JSON(json.RawMessage(cachedReviewAnalysis))
 	}
 
-	//fetching all reviews to send to python to analyze
+	//Fetch all reviews to send to python to analyze
 	reviews, err := models.Reviews().All(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error())
 	}
 
-	//sending review list to python backend for sentiment analysis
-	//getting comments from review list
-	comments := []string{}
-	for _, c := range reviews{
-		comments = append(comments, c.Comment)
+	//Send review list to python backend for sentiment analysis
+	comments := make([]string, len(reviews))
+	reviewIDs := make([]int, len(reviews))
+	for i, r := range reviews {
+		comments[i] = r.Comment
+		reviewIDs[i] = r.ReviewID
 	}
-	reviewIDs := []int{}
-	for _,c := range reviews{
-		reviewIDs = append(reviewIDs, c.ReviewID)
-	}
-
-	result := []AnalyzeResult{}
-	_, err = client.R().
-		SetHeader("Content-Type","application/json").
-		SetBody(map[string]interface{}{"review": comments, "reviewID": reviewIDs}).
-		SetResult(&result).
-		Post("http://192.168.240.1:5000/analyze")
-	if err != nil{
-		return service.SendError(c,500,err.Error())
+	analysisResult, err := utils.AnalyzeReviews(comments, reviewIDs)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
-	sortingResult := []AnalyzeResult{}
+	sortingResult := []dto.AnalyzeResult{}
 
+	//Sentiment filter
 	switch sort{
 		case "Positive Sentiment":
-			sortingResult = appendSortingResult(result,sort);
+			sortingResult = utils.AppendSortingResult(analysisResult,sort);
 		case "Negative Sentiment":
-			sortingResult = appendSortingResult(result,sort);
+			sortingResult = utils.AppendSortingResult(analysisResult,sort);
 		case "Neutral Sentiment":
-			sortingResult = appendSortingResult(result,sort);
+			sortingResult = utils.AppendSortingResult(analysisResult,sort);
 		case "Mixed Sentiment":
-			sortingResult = appendSortingResult(result,sort);
+			sortingResult = utils.AppendSortingResult(analysisResult,sort);
 		default:
 			fmt.Println("Do nothing in fallback")
 	}
@@ -255,7 +167,7 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 	}
 	pagedResult := sortingResult[startIndex:endIndex]
 
-
+	//Build response
 	resp := fiber.Map{
 		"status": "Success",
 		"result": pagedResult,
@@ -264,6 +176,7 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 		"message": "Successfully fetched review values!",
 	}
 
+	//Cache response
 	savingKeyJson, _ := json.Marshal(resp);
 	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10 * 24 * time.Hour)
 	if rdsErr != nil{
@@ -273,101 +186,49 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
-func appendSortingResult(result []AnalyzeResult, sort string) []AnalyzeResult {
-	sortingResult := []AnalyzeResult{}
-	keywords := []string{"Khen", "Chê", "Ý kiến trung lập"}
-
-	for _, s := range result {
-		count := 0
-		for _, keyword := range keywords {
-			if strings.Contains(s.Summary, keyword) {
-				count++
-			}
-		}
-
-		switch sort {
-			case "Positive Sentiment":
-				if count == 1 && strings.Contains(s.Summary, "Khen") {
-					sortingResult = append(sortingResult, s)
-				}
-			case "Negative Sentiment":
-				if count == 1 && strings.Contains(s.Summary, "Chê") {
-					sortingResult = append(sortingResult, s)
-				}
-			case "Neutral Sentiment":
-				if count == 1 && strings.Contains(s.Summary, "Ý kiến trung lập") {
-					sortingResult = append(sortingResult, s)
-				}
-			case "Mixed Sentiment":
-				if count >= 2 {
-					sortingResult = append(sortingResult, s)
-				}
-		}
-	}
-
-	return sortingResult
-}
-
-
-func convertIntSliceToInterface(s []int) []interface{}{
-	result := make([]interface{},len(s))
-	for i, v := range s{
-		result[i] = v
-	}
-	return result
-}
-
+//GetAdminReviewDetail fetches the specified review and send it to microservice flask to analyze
+//Returns the review along with the sentiment analysis.
 func GetAdminReviewDetail(c *fiber.Ctx) error{
-	
-	//establishing connection to python backend
-	client := resty.New()
-
+	//Fetch query param
 	reviewID := c.QueryInt("reviewID",0);
 	if reviewID == 0{
 		return service.SendError(c,400,"Did not receive reviewID");
 	}
 
-	//creating redisKey following reviewID
+	//Redis cache
 	redisKey := fmt.Sprintf("review:reviewID=%d:",reviewID);
-	//fetching redisKey
+	//Fetch redisKey
 	cachedReview, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
 	if err == nil{
-		fmt.Println("Đã lưu vào redis và trả về!");
 		return c.JSON(json.RawMessage(cachedReview))
 	}
 
-	review, err := models.Reviews(qm.Where("\"reviewID\" = ?",reviewID)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
-	}
-	listHinhDG, err := models.ReviewImages(qm.Where("\"reviewID\" = ?",reviewID)).All(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error())
-	}
-	reply, err := models.Replies(qm.Where("\"reviewID\" = ?",reviewID)).One(c.Context(),boil.GetContextDB());
-	if err != nil && err.Error() != "sql: no rows in result set"{
-		return service.SendError(c,500,err.Error())
+	//Fetch data concurrently
+	review,reviewImages,reply,err := utils.FetchReviewData(c,reviewID);
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
-	result := []AnalyzeResult{}
-	_, err = client.R().
-		SetHeader("Content-Type","application/json").
-		SetBody(map[string]interface{}{"review": []string{review.Comment}, "reviewID": []int{reviewID}}).
-		SetResult(&result).
-		Post("http://192.168.240.1:5000/analyze")
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	//Send review details to python backend for sentiment analysis
+	comments := []string{review.Comment}
+	reviewIDs := []int{review.ReviewID}
+
+	analysisResult, err := utils.AnalyzeReviews(comments, reviewIDs)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
+	//Build response
 	response := fiber.Map{
 		"status": "Success",
 		"data": review,
-		"listHinhDG": listHinhDG,
+		"listHinhDG": reviewImages,
 		"reply": reply,
-		"result": result,
+		"result": analysisResult,
 		"message": "Successfully fetched review details!",
 	}
 
+	//Cache response
 	savingKeyJson, _ := json.Marshal(response);
 	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson,10*24*time.Hour);
 	if rdsErr != nil{
@@ -377,10 +238,11 @@ func GetAdminReviewDetail(c *fiber.Ctx) error{
 	return c.JSON(response);
 }
 
+//InsertReviewReply inserts a reply to a specified review.
+//Returns the inserted reply
 func InsertReviewReply(c *fiber.Ctx) error{
 	var reply models.Reply
-	err := c.BodyParser(&reply);
-	if err != nil{
+	if err := c.BodyParser(&reply); err != nil{
 		return service.SendError(c,400,"Invalid body!");
 	}
 
@@ -390,8 +252,7 @@ func InsertReviewReply(c *fiber.Ctx) error{
 
 	//setting isReplied to true
 	reply.IsReplied = true
-	err = reply.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
-	if err != nil{
+	if err := reply.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
@@ -404,10 +265,11 @@ func InsertReviewReply(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
+//UpdateReviewReply updates an existing reply
+//Returns the updated reply
 func UpdateReviewReply(c *fiber.Ctx) error{
 	var reply models.Reply
-	err := c.BodyParser(&reply);
-	if err != nil{
+	if err := c.BodyParser(&reply); err != nil{
 		return service.SendError(c,400,"Invalid body!");
 	}
 
@@ -416,8 +278,7 @@ func UpdateReviewReply(c *fiber.Ctx) error{
 		return service.SendError(c,400,"Did not receive replyID");
 	}
  
-	_,err = reply.Update(c.Context(),boil.GetContextDB(),boil.Infer());
-	if err != nil{
+	if _,err := reply.Update(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 

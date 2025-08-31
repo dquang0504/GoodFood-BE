@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
@@ -130,7 +131,7 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 		SetHeader("Content-Type", "application/json").
 		SetBody(payload).
 		SetResult(&result).
-		Post("http://192.168.240.1:5000/reviewLabel")
+		Post("http://192.168.1.10:5000/reviewLabel")
 
 	if err != nil {
 		return service.SendError(c, 500, "Failed to call gRPC Flask: "+err.Error())
@@ -152,12 +153,6 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 		}
 	}
 
-	//insert images into firebase storage
-	uploadedURLs, err := utils.UploadFirebaseImages(imageBinaries,c.Context());
-	if err != nil{
-		return service.SendError(c,500, err.Error())
-	}
-
 	//insert new review
 	err = body.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
 	if err != nil{
@@ -167,6 +162,12 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 	err = utils.ClearProductCache(body.ProductID)
 	if err != nil{
 		fmt.Println("Error clearing product cache: ",err)
+	}
+
+	//insert images into firebase storage
+	uploadedURLs, err := utils.UploadFirebaseImages(imageBinaries,c.Context());
+	if err != nil{
+		return service.SendError(c,500, err.Error())
 	}
 
 	//insert its corresponding review images
@@ -219,7 +220,7 @@ func GetReviewDetail(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 
-	response := ReviewResponse{
+	response := dto.ReviewResponse{
 		Review: *review,
 		ReviewAccount: *review.R.AccountIDAccount,
 		ReviewProduct: *review.R.ProductIDProduct,
@@ -292,7 +293,7 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 		SetHeader("Content-Type", "application/json").
 		SetBody(payload).
 		SetResult(&result).
-		Post("http://192.168.240.1:5000/reviewLabel")
+		Post("http://192.168.1.10:5000/reviewLabel")
 
 	if err != nil {
 		return service.SendError(c, 500, "Failed to call gRPC Flask: "+err.Error())
