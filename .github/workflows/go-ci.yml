@@ -1,4 +1,4 @@
-name: Go
+name: Go with TFLite C API
 
 on:
   push:
@@ -17,33 +17,33 @@ jobs:
         with:
           go-version: '1.24.6'
 
-      # Cache TensorFlow Lite C API
-      - name: Cache TensorFlow Lite C API
+      # Cache TFLite C API installation
+      - name: Cache TensorFlow C API
         id: cache-tflite
         uses: actions/cache@v3
         with:
-          path: /usr/local/tflite
-          key: ${{ runner.os }}-tflite-v2.14.0
+          path: /usr/local/tensorflow_c
+          key: ${{ runner.os }}-tf-c-api-v2.18.0
 
-      # Install TensorFlow Lite C API (prebuilt) if cache not hit
-      - name: Install TensorFlow Lite C API
+      # Install if not cached
+      - name: Install TensorFlow C API
         if: steps.cache-tflite.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
-          wget https://storage.googleapis.com/tensorflow-nightly/github/tensorflow/tensorflow/lite/c/libtensorflowlite_c-linux-x86_64.tar.gz
-          mkdir tflite
-          tar -xvzf libtensorflowlite_c-linux-x86_64.tar.gz -C tflite
-          sudo mkdir -p /usr/local/tflite
-          sudo cp -r tflite/* /usr/local/tflite/
+          wget https://storage.googleapis.com/tensorflow/versions/2.18.0/libtensorflow-cpu-linux-x86_64.tar.gz
+          mkdir tf_c
+          tar -xzf libtensorflow-cpu-linux-x86_64.tar.gz -C tf_c
+          sudo mkdir -p /usr/local/tensorflow_c
+          sudo cp -r tf_c/* /usr/local/tensorflow_c/
           sudo ldconfig
 
-      # Add TFLite libs & includes to system path
-      - name: Configure TensorFlow Lite paths
+      # Set environment for cgo to find headers/libs
+      - name: Configure TensorFlow C API paths
         run: |
-          echo "C_INCLUDE_PATH=/usr/local/tflite/include" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=/usr/local/tflite/lib" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/usr/local/tflite/lib" >> $GITHUB_ENV
+          echo "C_INCLUDE_PATH=/usr/local/tensorflow_c/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=/usr/local/tensorflow_c/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/local/tensorflow_c/lib" >> $GITHUB_ENV
 
       - name: Build
         run: go build -v ./...
