@@ -1,82 +1,49 @@
-name: Go (with TensorFlow Lite C API)
+name: Go CI with TFLite
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main" ]
-
-env:
-  TFLITE_VERSION: 2.14.0
-  CGO_ENABLED: 1
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: GoodFood-BE
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24.6'
+          go-version: 1.22
 
-      # Cache for tflite artifacts (lib + headers) stored inside repo workspace
-      - name: Cache TensorFlow Lite C API build
-        id: cache-tflite
-        uses: actions/cache@v3
+      - name: Prepare TensorFlow Lite libs
+        run: |
+          sudo mkdir -p /usr/local/tflite/lib
+          sudo cp ./libs/libtensorflowlite.so /usr/local/tflite/lib/
+          sudo cp ./libs/libtensorflowlite_c.so /usr/local/tflite/lib/
+
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+          echo "CGO_LDFLAGS=-L/usr/local/tflite/lib -ltensorflowlite -ltensorflowlite_c" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/local/tflite/lib:\$LD_LIBRARY_PATH" >> $GITHUB_ENV
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
         with:
-          path: ./.cache/tflite
-          key: ${{ runner.os }}-tflite-c-api-v${{ env.TFLITE_VERSION }}
-
-      # Download and extract the pre-built TFLite C library
-      - name: Download & Extract TFLite C API (only when cache miss)
-        if: steps.cache-tflite.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y wget
-          mkdir -p ./.cache/tflite
-          # Download the Linux x86-64 version. Adjust URL if using a different runner.
-          wget -q https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-lite-2.14.0-linux-x86_64.tar.gz -O tflite_c.tar.gz
-          tar -C ./.cache/tflite -xzf tflite_c.tar.gz
-          # Ensure correct directory structure after extraction
-          mkdir -p ./.cache/tflite/include/tensorflow
-          mv ./.cache/tflite/include/tensorflow/lite ./.cache/tflite/include/tensorflow/lite_temp
-          mv ./.cache/tflite/include/tensorflow/lite_temp ./.cache/tflite/include/tensorflow/lite
-
-      # Move cached or newly downloaded files to system library paths
-      - name: Install TFLite to system path
-        run: |
-          set -euo pipefail
-          sudo mkdir -p /usr/local/tflite_c
-          sudo rsync -r --delete ./.cache/tflite/* /usr/local/tflite_c/
-          sudo ldconfig
-
-      # Verify files are in the correct location before the Go build
-      - name: Verify TFLite installation
-        run: |
-          ls -la /usr/local/tflite_c/lib/libtensorflowlite_c.so
-          ls -la /usr/local/tflite_c/include/tensorflow/lite/c/c_api.h
-
-      # Export flags so CGO can find headers & linker can find libs
-      - name: Export CGO flags for go build
-        run: |
-          echo "CGO_CFLAGS=-I/usr/local/tflite_c/include" >> $GITHUB_ENV
-          echo "CGO_LDFLAGS=-L/usr/local/tflite_c/lib -ltensorflowlite_c" >> $GITHUB_ENV
-          
-          # Safely set LD_LIBRARY_PATH
-          if [ -z "$LD_LIBRARY_PATH" ]; then
-            echo "LD_LIBRARY_PATH=/usr/local/tflite_c/lib" >> $GITHUB_ENV
-          else
-            echo "LD_LIBRARY_PATH=/usr/local/tflite_c/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          fi
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Build
-        run: go build -v ./...
-        working-directory: GoodFood-BE
+        run: go build ./...
 
       - name: Test
-        run: go test -v ./...
-        working-directory: GoodFood-BE
+        run: go test ./...
