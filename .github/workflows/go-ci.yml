@@ -21,17 +21,18 @@ jobs:
       - name: Install TensorFlow Lite C API
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip
+          sudo apt-get install -y wget unzip cmake build-essential
           wget https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.14.0.zip
           unzip v2.14.0.zip
           cd tensorflow-2.14.0/tensorflow/lite/c
-          cmake .
+          mkdir build && cd build
+          cmake ..
           make -j$(nproc)
           sudo cp libtensorflowlite_c.so /usr/local/lib/
           sudo mkdir -p /usr/local/include/tensorflow/lite/c
-          sudo cp c_api*.h /usr/local/include/tensorflow/lite/c/
+          sudo cp ../c_api*.h /usr/local/include/tensorflow/lite/c/
           sudo ldconfig
-
+          
       - name: Build
         run: go build -v ./...
         working-directory: GoodFood-BE
