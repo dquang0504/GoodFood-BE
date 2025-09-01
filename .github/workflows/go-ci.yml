@@ -17,22 +17,34 @@ jobs:
         with:
           go-version: '1.24.6'
 
-      # Install prebuilt TensorFlow Lite C API
+      # Cache TensorFlow Lite C API
+      - name: Cache TensorFlow Lite C API
+        id: cache-tflite
+        uses: actions/cache@v3
+        with:
+          path: /usr/local/tflite
+          key: ${{ runner.os }}-tflite-v2.14.0
+
+      # Install TensorFlow Lite C API (prebuilt) if cache not hit
       - name: Install TensorFlow Lite C API
+        if: steps.cache-tflite.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip cmake build-essential
-          wget https://github.com/tensorflow/tensorflow/archive/refs/tags/v2.14.0.zip
-          unzip v2.14.0.zip
-          cd tensorflow-2.14.0/tensorflow/lite/c
-          mkdir build && cd build
-          cmake ..
-          make -j$(nproc)
-          sudo cp libtensorflowlite_c.so /usr/local/lib/
-          sudo mkdir -p /usr/local/include/tensorflow/lite/c
-          sudo cp ../c_api*.h /usr/local/include/tensorflow/lite/c/
+          sudo apt-get install -y wget
+          wget https://storage.googleapis.com/tensorflow-nightly/github/tensorflow/tensorflow/lite/c/libtensorflowlite_c-linux-x86_64.tar.gz
+          mkdir tflite
+          tar -xvzf libtensorflowlite_c-linux-x86_64.tar.gz -C tflite
+          sudo mkdir -p /usr/local/tflite
+          sudo cp -r tflite/* /usr/local/tflite/
           sudo ldconfig
-          
+
+      # Add TFLite libs & includes to system path
+      - name: Configure TensorFlow Lite paths
+        run: |
+          echo "C_INCLUDE_PATH=/usr/local/tflite/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=/usr/local/tflite/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/local/tflite/lib" >> $GITHUB_ENV
+
       - name: Build
         run: go build -v ./...
         working-directory: GoodFood-BE
