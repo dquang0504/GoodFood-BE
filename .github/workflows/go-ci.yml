@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 env:
-  TFLITE_VERSION: 2.14.0   # <-- đổi version nếu cần
+  TFLITE_VERSION: 2.14.0
   CGO_ENABLED: 1
 
 jobs:
@@ -22,17 +22,7 @@ jobs:
         with:
           go-version: '1.24.6'
 
-      # cache go modules + build cache
-      - name: Cache Go modules
-        id: cache-go
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            /home/runner/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-
-      # cache for tflite artifacts (lib + headers) stored inside repo workspace
+      # Cache for tflite artifacts (lib + headers) stored inside repo workspace
       - name: Cache TensorFlow Lite C API build
         id: cache-tflite
         uses: actions/cache@v3
@@ -40,84 +30,48 @@ jobs:
           path: ./.cache/tflite
           key: ${{ runner.os }}-tflite-c-api-v${{ env.TFLITE_VERSION }}
 
-      # if cache hit, copy cached files into /usr/local/tflite_c
-      - name: Restore cached TFLite into system lib path
-        if: steps.cache-tflite.outputs.cache-hit == 'true'
-        run: |
-          sudo mkdir -p /usr/local/tflite_c
-          sudo cp -r ./.cache/tflite/* /usr/local/tflite_c/
-          sudo ldconfig
-
-      # otherwise: download TF source, build just tflite/c with CMake, store into ./.cache/tflite and copy to /usr/local
-      - name: Build & cache TensorFlow Lite C API (only when cache miss)
+      # Download and extract the pre-built TFLite C library
+      - name: Download & Extract TFLite C API (only when cache miss)
         if: steps.cache-tflite.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y wget unzip cmake build-essential
-          VER=${{ env.TFLITE_VERSION }}
-          echo "Using TFLITE_VERSION=$VER"
+          sudo apt-get install -y wget
+          mkdir -p ./.cache/tflite
+          # Download the Linux x86-64 version. Adjust URL if using a different runner.
+          wget -q https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-lite-2.14.0-linux-x86_64.tar.gz -O tflite_c.tar.gz
+          tar -C ./.cache/tflite -xzf tflite_c.tar.gz
+          # Ensure correct directory structure after extraction
+          mkdir -p ./.cache/tflite/include/tensorflow
+          mv ./.cache/tflite/include/tensorflow/lite ./.cache/tflite/include/tensorflow/lite_temp
+          mv ./.cache/tflite/include/tensorflow/lite_temp ./.cache/tflite/include/tensorflow/lite
 
-          # download TF source zip for the tag
-          wget -q "https://github.com/tensorflow/tensorflow/archive/refs/tags/v${VER}.zip" -O tf.zip
-          unzip -q tf.zip
-
-          # detect the extracted 'tensorflow' source dir (robust for different archive layouts)
-          TF_ROOT=$(find . -maxdepth 3 -type d -name 'tensorflow' | head -n1)
-          if [ -z "$TF_ROOT" ]; then
-            echo "Cannot find tensorflow source directory after unzip"; ls -la; exit 1
-          fi
-          echo "Found tensorflow source at: $TF_ROOT"
-
-          # build tflite C shared lib with CMake (out-of-source)
-          cd "$TF_ROOT/tensorflow/lite/c" 2>/dev/null || cd "$TF_ROOT/lite/c"
-          mkdir -p build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release -j$(nproc)
-
-          # prepare cache layout
-          CACHE_DIR="$GITHUB_WORKSPACE/.cache/tflite"
-          mkdir -p "$CACHE_DIR/lib"
-          mkdir -p "$CACHE_DIR/include/tensorflow"
-
-          # copy the built lib (if present)
-          if [ -f ./libtensorflowlite_c.so ]; then
-            cp -v ./libtensorflowlite_c.so "$CACHE_DIR/lib/"
-          else
-            # try alternative path
-            LIBPATH=$(find .. -maxdepth 2 -type f -name 'libtensorflowlite_c.so' | head -n1)
-            if [ -n "$LIBPATH" ]; then
-              cp -v "$LIBPATH" "$CACHE_DIR/lib/"
-            else
-              echo "libtensorflowlite_c.so not found after build"; exit 1
-            fi
-          fi
-
-          # copy headers: ensure the 'tensorflow/lite' header tree is available (contains c/ and core/c/)
-          # try to locate the top-level 'lite' dir from the unzipped source
-          UNZIP_ROOT=$(dirname "$TF_ROOT")
-          if [ -d "$UNZIP_ROOT/tensorflow/lite" ]; then
-            cp -r "$UNZIP_ROOT/tensorflow/lite" "$CACHE_DIR/include/tensorflow/"
-          elif [ -d "$TF_ROOT/lite" ]; then
-            cp -r "$TF_ROOT/lite" "$CACHE_DIR/include/tensorflow/"
-          else
-            # fallback: copy whatever 'lite' folders we find
-            find . -type d -name 'lite' -exec cp -r {} "$CACHE_DIR/include/tensorflow/" \; || true
-          fi
-
-          # install to /usr/local/tflite_c and update linker
+      # Move cached or newly downloaded files to system library paths
+      - name: Install TFLite to system path
+        run: |
+          set -euo pipefail
           sudo mkdir -p /usr/local/tflite_c
-          sudo cp -r "$CACHE_DIR"/* /usr/local/tflite_c/
+          sudo rsync -r --delete ./.cache/tflite/* /usr/local/tflite_c/
           sudo ldconfig
 
-      # export flags so CGO can find headers & linker can find libs
+      # Verify files are in the correct location before the Go build
+      - name: Verify TFLite installation
+        run: |
+          ls -la /usr/local/tflite_c/lib/libtensorflowlite_c.so
+          ls -la /usr/local/tflite_c/include/tensorflow/lite/c/c_api.h
+
+      # Export flags so CGO can find headers & linker can find libs
       - name: Export CGO flags for go build
         run: |
-          echo "CGO_ENABLED=1" >> $GITHUB_ENV
           echo "CGO_CFLAGS=-I/usr/local/tflite_c/include" >> $GITHUB_ENV
           echo "CGO_LDFLAGS=-L/usr/local/tflite_c/lib -ltensorflowlite_c" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=/usr/local/tflite_c/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          
+          # Safely set LD_LIBRARY_PATH
+          if [ -z "$LD_LIBRARY_PATH" ]; then
+            echo "LD_LIBRARY_PATH=/usr/local/tflite_c/lib" >> $GITHUB_ENV
+          else
+            echo "LD_LIBRARY_PATH=/usr/local/tflite_c/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          fi
 
       - name: Build
         run: go build -v ./...
