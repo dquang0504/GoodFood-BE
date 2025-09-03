@@ -1,0 +1,266 @@
+package handlers
+
+import (
+	"GoodFood-BE/internal/service"
+	"GoodFood-BE/models"
+	"fmt"
+	"math"
+	"github.com/gofiber/fiber/v2"
+	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+)
+
+//This function is used to fetch the address(es) of the requesting user.
+//Returns a list of paginated address(es).
+func FetchAddress(c *fiber.Ctx) error{
+
+	const pageSize = 6; //fixed pageSize due to UI design constraint.
+
+	//Parse query params.
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID");
+	}
+	page := c.QueryInt("page",0);
+	if page == 0{
+		return service.SendError(c,400,"Did not receive pageNum");
+	}
+
+	//Page size is fixed to 6 because UI Address.tsx displays 6 items per page
+	offset := (page-1)*pageSize;
+
+	//Fetch a max of 6 records for table Address (component Address.tsx) for every page.
+	addresses,err := models.Addresses(
+		qm.Where("\"accountID\" = ?",accountID),
+		qm.Limit(pageSize),
+		qm.Offset(offset),
+		qm.OrderBy("\"addressID\" DESC"),
+	).All(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Error fetching addresses");
+	}
+
+	//Count total addresses to calculate totalPage.
+	totalAddress,err := models.Addresses(qm.Where("\"accountID\" = ?",accountID)).Count(c.Context(),boil.GetContextDB());
+	if err != nil {
+		return service.SendError(c, 500, "Total address not found")
+	}
+	totalPage := int(math.Ceil(float64(totalAddress) / float64(pageSize)))
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": addresses,
+		"totalPage": totalPage,
+		"message": "Successfully fetched addresses",
+	}
+
+	return c.JSON(resp);
+}
+
+//This function inserts a new record into Address.
+//Returns the insert information
+func AddressInsert(c *fiber.Ctx) error{
+
+	//Parse data into struct Address
+	var addressDetails models.Address
+	if err := c.BodyParser(&addressDetails); err != nil{
+		return service.SendError(c,400,"Invalid request body");
+	}
+
+	//Insert
+	if err := addressDetails.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
+		fmt.Printf("Insert error: %+v\n", err.Error())
+		return service.SendError(c,500,"Couldnt insert new address");
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": addressDetails,
+		"message": "Successfully inserted new address",
+	}
+	return c.JSON(resp);
+}
+
+//This function fetches the details of a specific address.
+//Returns the address details.
+func AddressDetail(c *fiber.Ctx) error{
+
+	//Parse query params
+	addressID := c.QueryInt("addressID",0)
+	if addressID == 0{
+		return service.SendError(c,400,"Did not receive addressID");
+	}
+	accountID := c.QueryInt("accountID",0)
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive addressID");
+	}
+
+	addressDetail,err := models.Addresses(qm.Where("\"addressID\" = ? AND \"accountID\" = ?",addressID,accountID)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,404,"Error fetching address details");
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": addressDetail,
+		"message": "Successfully fetched address details",
+	}
+
+	return c.JSON(resp);
+}
+
+//This function updates the specified address.
+//Returns the update information.
+func AddressUpdate(c *fiber.Ctx) error{
+
+	//Parse params and body
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID")
+	}
+	addressID := c.QueryInt("addressID",0);
+	if addressID == 0{
+		return service.SendError(c,400,"Did not receive addressID")
+	}
+	var updateDetails models.Address
+	if err := c.BodyParser(&updateDetails);err != nil{
+		return service.SendError(c,400,"Invalid body request");
+	}
+
+	//Look for the to be updated address.
+	toBeUpdated,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND \"addressID\" = ?",accountID,addressID),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Cannot find the specified address");
+	}
+
+	//Update details
+	toBeUpdated.Address = updateDetails.Address
+	toBeUpdated.DistrictID = updateDetails.DistrictID
+	toBeUpdated.FullName = updateDetails.FullName
+	toBeUpdated.PhoneNumber = updateDetails.PhoneNumber
+	toBeUpdated.SpecificAddress = updateDetails.SpecificAddress
+	toBeUpdated.Status = updateDetails.Status
+	toBeUpdated.WardCode = updateDetails.WardCode
+	_,err = toBeUpdated.Update(c.Context(),boil.GetContextDB(),boil.Infer())
+	if err != nil{
+		return service.SendError(c,500,"Cannot update the specified address")
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": toBeUpdated,
+		"message": "Successfully updated the address",
+	}
+
+	return c.JSON(resp);
+}
+
+//This function deletes the specified address
+//Returns the delete information
+func AddressDelete(c *fiber.Ctx) error{
+
+	//Parse query params
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID")
+	}
+	addressID := c.QueryInt("addressID",0);
+	if addressID == 0{
+		return service.SendError(c,400,"Did not receive addressID")
+	}
+
+	//Look for the to be deleted address and delete it
+	toBeDeleted,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND \"addressID\" = ?",accountID,addressID),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Cannot find the specified address");
+	}
+	_,err = toBeDeleted.Delete(c.Context(),boil.GetContextDB())
+	if err != nil{
+		return service.SendError(c,500,"Cannot delete the address")
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": toBeDeleted,
+		"message": "Successfully updated the address",
+	}
+
+	return c.JSON(resp);
+}
+
+//This function checks if the authenticated user has his default address set.
+//Returns the default address if found.
+func AddressFill(c *fiber.Ctx) error{
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID");
+	}
+
+	address,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND status = TRUE",accountID),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Please go set your default delivery address!");
+	}
+
+	return service.SendJSON(c,"Success",address,nil,"Successfully fetched the fill address");
+}
+
+//This function lets the user choose their default address mid payment.
+//Returns the new default address.
+func AddressQuickChange(c *fiber.Ctx) error{
+
+	//Parse query params
+	accountID := c.QueryInt("accountID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive accountID")
+	}
+	addressID := c.QueryInt("addressID",0);
+	if accountID == 0{
+		return service.SendError(c,400,"Did not receive addressID")
+	}
+	toBeDisabled := c.QueryInt("toBeDisabled",0); //addressID to be replaced
+	if toBeDisabled == 0{
+		return service.SendError(c,400,"Did not receive toBeDisabled")
+	}
+
+	//Fetch new default address
+	toBeUpdated,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND \"addressID\" = ?",accountID,addressID),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Cannot find the specified address");
+	}
+
+	//Fetch to be replaced default address
+	disableThis,err := models.Addresses(
+		qm.Where("\"accountID\" = ? AND \"addressID\" = ?",accountID,toBeDisabled),
+	).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Cannot find the specified address");
+	}
+
+	//Update details
+	toBeUpdated.Status = true
+	disableThis.Status = false
+	_,err = toBeUpdated.Update(c.Context(),boil.GetContextDB(),boil.Infer())
+	if err != nil{
+		return service.SendError(c,500,"Cannot update the toBeUpdated address")
+	}
+	_,err = disableThis.Update(c.Context(),boil.GetContextDB(),boil.Infer())
+	if err != nil{
+		return service.SendError(c,500,"Cannot update the disableThis address")
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": toBeUpdated,
+		"message": "Successfully updated the address",
+	}
+
+	return c.JSON(resp);
+}

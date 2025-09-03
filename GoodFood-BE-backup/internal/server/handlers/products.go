@@ -1,0 +1,205 @@
+package handlers
+
+import (
+	"GoodFood-BE/internal/dto"
+	redisdatabase "GoodFood-BE/internal/redis-database"
+	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
+	"GoodFood-BE/models"
+	"encoding/json"
+	"fmt"
+	"time"
+	"github.com/go-resty/resty/v2"
+	"github.com/gofiber/fiber/v2"
+	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	// "golang.org/x/text/number"
+)
+
+//GetFour function fetches 4 product with types to display at front-end
+//Returns a slice of 4
+func GetFour(c *fiber.Ctx) error {
+	// Fetch 4 products to display at Home.tsx
+	products, err := models.Products(qm.Where("status = true"),qm.Limit(4), qm.Load(models.ProductRels.ProductTypeIDProductType)).All(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c,500,"Failed to fetch products")
+	}
+
+	//Build response
+	response := make([]dto.GetFourStruct,len(products));
+	for i,product := range products{
+		response[i] = dto.GetFourStruct{
+			Product: *product,
+			ProductType: product.R.ProductTypeIDProductType,
+		}
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": response,
+		"message": "Successfully fetched featuring items",
+	}
+
+	return c.JSON(resp)
+}
+
+//GetTypes function fetches all product types to display at Product.tsx
+func GetTypes(c *fiber.Ctx) error{
+	types,err := models.ProductTypes(qm.Where("\"status\" = true")).All(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"Failed to fetch product types!")
+	}
+	resp := fiber.Map{
+		"status":"Success",
+		"data": types,
+		"message": "Successfully fetched product types",
+	}
+	return c.JSON(resp);
+}
+
+
+func GetProductsByPage(c *fiber.Ctx) error{
+
+	//Fetch query params
+	page := c.QueryInt("page",0);
+	if page == 0{
+		return service.SendError(c,400,"Did not receive pageNum");
+	}
+	typeName := c.Query("type","");
+	search := c.Query("search","");
+	minPrice := c.QueryInt("minPrice",0);
+	maxPrice := c.QueryInt("maxPrice",0);
+	orderBy := c.Query("orderBy","ASC");
+
+	//Filters and pagination logic
+	products, totalPage, redisKey, err := utils.GetProductsUtil(c,search,typeName,orderBy,page,minPrice,maxPrice);
+	if err != nil {
+		println(err.Error())
+		return service.SendError(c, 500, "Failed to fetch products by page")
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": products,
+		"totalPage": totalPage,
+		"message": "Successfully fetched products by page",
+	}
+
+	//saving redis key to redis database for 10 mins 
+	jsonData, _ := json.Marshal(resp); 
+	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData, 10*time.Minute); 
+	rdsErr := redisdatabase.Client.SAdd(redisdatabase.Ctx,"products:keys",redisKey) 
+	if rdsErr != nil{ 
+		fmt.Println("Error adding redis key to set: ", rdsErr) 
+	}
+
+	return c.JSON(resp);
+}
+
+func ClassifyImage(c *fiber.Ctx) error{
+	//Initialize resty
+	client := resty.New();
+
+	//Lấy dữ liệu ảnh từ request
+	file, err := c.FormFile("image")
+	if err != nil{
+		return service.SendError(c,400,"Invalid request format");
+	}
+
+	// Mở file ảnh
+	fileContent, err := file.Open()
+	if err != nil {
+		return service.SendError(c, 500, "Failed to open uploaded image")
+	}
+	defer fileContent.Close()
+
+	var result dto.PredictResult
+	_, err = client.R().
+		SetFileReader("file",file.Filename, fileContent).
+		SetResult(&result).
+		Post("http://192.168.1.9:5000/callModel")
+	if err != nil {
+		return service.SendError(c,500,"Python microservice unavailable!")
+	}
+
+
+	//Trả về kết quả
+	return c.JSON(fiber.Map{
+		"status": "Success",
+		"message": "Image classified successfully",
+		"data": result,
+	})
+
+}
+
+//GetDetail handles fetching product details including reviews, images, and star counts.
+//It also applies caching using Redis for performance optimization.
+func GetDetail(c *fiber.Ctx) error{
+	//Fetch query params
+	id := c.QueryInt("id",0);
+	if id == 0{
+		return service.SendError(c,400,"ID not found");
+	}
+	filter := c.Query("filter","All");
+	page := c.QueryInt("page",1);
+	
+	//Redis key
+	redisKey := fmt.Sprintf("product:detail:%d:filter=%s:page=%d",id,filter,page)
+	//Fetch redis cache
+	cachedDetail,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
+	if err == nil{
+		return c.JSON(json.RawMessage(cachedDetail))
+	}
+	
+	// Build product detail response
+	detailedResponse, totalPage, err := utils.BuildProductDetail(c, id, filter, page)
+	if err != nil {
+		return service.SendError(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": detailedResponse,
+		"totalPage": totalPage,
+		"message": "Successfully fetched detailed product!",
+	}
+
+	//Saving redis cache for 30 mins
+	jsonData, _ := json.Marshal(resp)
+	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData,30*time.Minute)
+	//add this key to the set tracking all cache keys of this product
+	redisSetKey := fmt.Sprintf("product:detail:%d:keys",id)
+	err = redisdatabase.Client.SAdd(redisdatabase.Ctx,redisSetKey,redisKey).Err()
+	if err != nil{
+		fmt.Println("Error adding redis key to set: ", err)
+	}
+
+	return c.JSON(resp);
+}
+
+//GetSimilar function fetches products that share the same typeID with one specified product.
+func GetSimilar(c *fiber.Ctx) error{
+	productID := c.QueryInt("id",0);
+	if productID == 0{
+		return service.SendError(c,400,"Did not receive ID!");
+	}
+
+	typeID := c.QueryInt("typeID",0);
+	if typeID == 0{
+		return service.SendError(c,400,"Did not receive typeID!");
+	}
+
+	//Fetching typeName from typeID
+	similars,err := models.Products(qm.Where("\"productID\" != ? AND \"productTypeID\" = ?",productID,typeID)).All(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,500,"ID not found!");
+	}
+
+	resp := fiber.Map{
+		"status": "Success",
+		"data": similars,
+		"message": "Successfully fetched similar products",
+	}
+
+	return c.JSON(resp);
+}
