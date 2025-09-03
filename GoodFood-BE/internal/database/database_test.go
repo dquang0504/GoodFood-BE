@@ -1,70 +1,43 @@
 package database
 
 import (
-	"context"
-	"log"
+	"database/sql"
+	"fmt"
 	"os"
 	"testing"
-	"time"
-
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func mustStartPostgresContainer() (func(context.Context) error, error) {
+var db *sql.DB
+
+func TestMain(m *testing.M){
 	var (
 		dbName = os.Getenv("GOODFOOD_DB_DATABASE")
 		dbPwd  = os.Getenv("GOODFOOD_DB_PASSWORD")
 		dbUser = os.Getenv("GOODFOOD_DB_USERNAME")
+		dbHost = os.Getenv("GOODFOOD_DB_HOST")
+		dbPort = os.Getenv("GOODFOOD_DB_PORT")
 	)
 
-	dbContainer, err := postgres.Run(
-		context.Background(),
-		"postgres:latest",
-		postgres.WithDatabase(dbName),
-		postgres.WithUsername(dbUser),
-		postgres.WithPassword(dbPwd),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(5*time.Second)),
-	)
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		dbUser, dbPwd, dbHost, dbPort, dbName)
+
+	var err error
+	db, err = sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, err
+		fmt.Printf("❌ cannot open db: %v\n", err)
+		os.Exit(1)
+	}
+	if err = db.Ping(); err != nil {
+		fmt.Printf("❌ cannot ping db: %v\n", err)
+		os.Exit(1)
 	}
 
-	database = dbName
-	password = dbPwd
-	username = dbUser
+	fmt.Println("✅ Connected to test database")
 
-	dbHost, err := dbContainer.Host(context.Background())
-	if err != nil {
-		return dbContainer.Terminate, err
-	}
+	code := m.Run()
 
-	dbPort, err := dbContainer.MappedPort(context.Background(), "5432/tcp")
-	if err != nil {
-		return dbContainer.Terminate, err
-	}
-
-	host = dbHost
-	port = dbPort.Port()
-
-	return dbContainer.Terminate, err
-}
-
-func TestMain(m *testing.M) {
-	teardown, err := mustStartPostgresContainer()
-	if err != nil {
-		log.Fatalf("could not start postgres container: %v", err)
-	}
-
-	m.Run()
-
-	if teardown != nil && teardown(context.Background()) != nil {
-		log.Fatalf("could not teardown postgres container: %v", err)
-	}
+	_ = db.Close()
+	os.Exit(code)
 }
 
 func TestNew(t *testing.T) {
