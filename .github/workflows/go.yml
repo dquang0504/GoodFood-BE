@@ -1,0 +1,63 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: DB_CONNECTION
+    defaults:
+      run:
+        working-directory: GoodFood-BE
+
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: ${{ vars.GOODFOOD_DB_USERNAME }}
+          POSTGRES_PASSWORD: ${{ vars.GOODFOOD_DB_PASSWORD }}
+          POSTGRES_DB: ${{ vars.GOODFOOD_DB_DATABASE }}
+        options: >-
+          --health-cmd="pg_isready -U ${{ vars.GOODFOOD_DB_USERNAME }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.6'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod tidy
+
+      - name: Wait for DB ready
+        run: |
+          until pg_isready -h localhost -p 5432 -U $DB_USER; do
+            echo "⏳ Waiting for postgres..."
+            sleep 2
+          done
+        env:
+          DB_USER: ${{ vars.GOODFOOD_DB_USERNAME }}
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run tests (exclude sqlboiler + skip testcontainers)
+        run: go test -v ./internal/... -tags '!boiltests'
+        env:
+          DB_HOST: ${{ vars.GOODFOOD_DB_HOST }}
+          DB_PORT: ${{ vars.GOODFOOD_DB_PORT }}
+          DB_USER: ${{ vars.GOODFOOD_DB_USERNAME }}
+          DB_PASSWORD: ${{ vars.GOODFOOD_DB_PASSWORD }}
+          DB_NAME: ${{ vars.GOODFOOD_DB_DATABASE }}
