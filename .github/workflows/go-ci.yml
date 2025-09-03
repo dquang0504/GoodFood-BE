@@ -1,6 +1,3 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go CI
 
 on:
@@ -13,24 +10,56 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    environment: DB_CONNECTION   # gắn job này với environment DB_CONNECTION
     defaults:
       run:
         working-directory: GoodFood-BE
+
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
+        options: >-
+          --health-cmd="pg_isready -U ${{ secrets.DB_USER }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24.6'
-        cache: true
-        
-    - name: Download dependencies
-      run: go mod tidy
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.6'
+          cache: true
 
-    - name: Build
-      run: go build -v ./...
+      - name: Download dependencies
+        run: go mod tidy
 
-    - name: Test
-      run: go test -v ./...
+      - name: Wait for DB ready
+        run: |
+          until pg_isready -h localhost -p 5432 -U $DB_USER; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+        env:
+          DB_USER: ${{ secrets.DB_USER }}
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./...
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
