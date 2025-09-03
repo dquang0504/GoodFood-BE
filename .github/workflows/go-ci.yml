@@ -7,10 +7,9 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
-    environment: DB_CONNECTION   # gắn job này với environment DB_CONNECTION
+    environment: DB_CONNECTION   # lấy env từ GitHub Environment
     defaults:
       run:
         working-directory: GoodFood-BE
@@ -46,11 +45,29 @@ jobs:
       - name: Wait for DB ready
         run: |
           until pg_isready -h localhost -p 5432 -U $DB_USER; do
-            echo "Waiting for postgres..."
+            echo "⏳ Waiting for postgres..."
             sleep 2
           done
         env:
           DB_USER: ${{ vars.DB_USER }}
+
+      # Nếu bạn có migrations dạng Go code
+      - name: Run migrations
+        run: go run ./cmd/migrate.go
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: ${{ vars.DB_USER }}
+          DB_PASSWORD: ${{ vars.DB_PASSWORD }}
+          DB_NAME: ${{ vars.DB_NAME }}
+
+      # Nếu bạn dùng thư mục migrations SQL thay vì code Go,
+      # thay step trên bằng migrate CLI (comment out nếu không cần):
+      # - name: Run migrations
+      #   run: |
+      #     wget -q https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz
+      #     tar -xzf migrate.linux-amd64.tar.gz
+      #     ./migrate -path ./migrations -database "postgres://${{ vars.DB_USER }}:${{ vars.DB_PASSWORD }}@localhost:5432/${{ vars.DB_NAME }}?sslmode=disable" up
 
       - name: Build
         run: go build -v ./...
