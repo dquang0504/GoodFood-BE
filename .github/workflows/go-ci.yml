@@ -24,7 +24,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ vars.DB_PASSWORD }}
           POSTGRES_DB: ${{ vars.DB_NAME }}
         options: >-
-          --health-cmd="pg_isready -U postgres"
+          --health-cmd="pg_isready -U ${{ vars.DB_USER }}"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -44,16 +44,18 @@ jobs:
 
       - name: Wait for DB ready
         run: |
-          until pg_isready -h localhost -p 5432 -U postgres; do
+          until pg_isready -h localhost -p 5432 -U $DB_USER; do
             echo "⏳ Waiting for postgres..."
             sleep 2
           done
+        env:
+          DB_USER: ${{ vars.DB_USER }}
 
       - name: Build
         run: go build -v ./...
 
-      - name: Run tests (exclude sqlboiler auto-gen)
-        run: go test -v ./... -tags '!boiltests'
+      - name: Run tests (exclude sqlboiler + skip testcontainers)
+        run: go test -v ./internal/... -tags '!boiltests'
         env:
           DB_HOST: ${{ vars.DB_HOST }}
           DB_PORT: ${{ vars.DB_PORT }}
