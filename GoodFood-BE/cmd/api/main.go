@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"syscall"
 	"time"
-
-	_ "github.com/joho/godotenv/autoload"
 )
 
 func gracefulShutdown(fiberServer *server.FiberServer, dbService database.Service, done chan bool) {
