@@ -21,11 +21,11 @@ jobs:
         ports:
           - 5432:5432
         env:
-          POSTGRES_USER: ${{ secrets.DB_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.DB_NAME }}
+          POSTGRES_USER: ${{ vars.DB_USER }}
+          POSTGRES_PASSWORD: ${{ vars.DB_PASSWORD }}
+          POSTGRES_DB: ${{ vars.DB_NAME }}
         options: >-
-          --health-cmd="pg_isready -U ${{ secrets.DB_USER }}"
+          --health-cmd="pg_isready -U ${{ vars.DB_USER }}"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -50,7 +50,7 @@ jobs:
             sleep 2
           done
         env:
-          DB_USER: ${{ secrets.DB_USER }}
+          DB_USER: ${{ vars.DB_USER }}
 
       - name: Build
         run: go build -v ./...
@@ -60,6 +60,6 @@ jobs:
         env:
           DB_HOST: localhost
           DB_PORT: 5432
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ vars.DB_USER }}
+          DB_PASSWORD: ${{ vars.DB_PASSWORD }}
+          DB_NAME: ${{ vars.DB_NAME }}
