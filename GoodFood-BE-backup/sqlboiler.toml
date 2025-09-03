@@ -1,9 +1,0 @@
-[psql]
-    dbname= "GoodFood"
-    host = "localhost"
-    port = 5432
-    user = "postgres"
-    pass = "123456"
-    sslmode = "disable"
-    schema = "public"
-    structTagCasing = "camel"
