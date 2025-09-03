@@ -52,22 +52,22 @@ jobs:
           DB_USER: ${{ vars.DB_USER }}
 
       # Nếu bạn có migrations dạng Go code
-      - name: Run migrations
-        run: go run ./cmd/migrate.go
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: ${{ vars.DB_USER }}
-          DB_PASSWORD: ${{ vars.DB_PASSWORD }}
-          DB_NAME: ${{ vars.DB_NAME }}
+      # - name: Run migrations
+      #   run: go run ./cmd/migrate.go
+      #   env:
+      #     DB_HOST: localhost
+      #     DB_PORT: 5432
+      #     DB_USER: ${{ vars.DB_USER }}
+      #     DB_PASSWORD: ${{ vars.DB_PASSWORD }}
+      #     DB_NAME: ${{ vars.DB_NAME }}
 
       # Nếu bạn dùng thư mục migrations SQL thay vì code Go,
       # thay step trên bằng migrate CLI (comment out nếu không cần):
-      # - name: Run migrations
-      #   run: |
-      #     wget -q https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz
-      #     tar -xzf migrate.linux-amd64.tar.gz
-      #     ./migrate -path ./migrations -database "postgres://${{ vars.DB_USER }}:${{ vars.DB_PASSWORD }}@localhost:5432/${{ vars.DB_NAME }}?sslmode=disable" up
+      - name: Run migrations
+        run: |
+          wget -q https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz
+          tar -xzf migrate.linux-amd64.tar.gz
+          ./migrate -path ./migrations -database "postgres://${{ vars.DB_USER }}:${{ vars.DB_PASSWORD }}@localhost:5432/${{ vars.DB_NAME }}?sslmode=disable" up
 
       - name: Build
         run: go build -v ./...
