@@ -10,8 +10,8 @@ import (
 	"math"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries/qm"
+	"github.com/aarondl/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/queries/qm"
 )
 
 //GetAdminProductTypes fetches product types with pagination, searching and number of products in each type.

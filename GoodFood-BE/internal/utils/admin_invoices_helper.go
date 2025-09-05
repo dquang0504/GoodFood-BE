@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aarondl/null/v8"
+	"github.com/aarondl/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/queries"
+	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"
-	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries"
-	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	"gopkg.in/gomail.v2"
 )
 
@@ -188,7 +189,7 @@ func UpdateInvoiceStatus(c *fiber.Ctx, invoiceID int, status dto.UpdateInvoiceSt
 	//cancelation
 	if invoiceStatus.InvoiceStatusID == 6{
 		invoice.InvoiceStatusID = 6
-		invoice.CancelReason = status.CancelReason
+		invoice.CancelReason = null.String(status.CancelReason)
 		err := SendOrderCancelEmail(invoice.R.AccountIDAccount.Email,invoice.CancelReason.String,invoice.Status);
 		if err != nil{
 			return nil, err

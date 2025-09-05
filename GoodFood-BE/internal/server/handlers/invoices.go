@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/boil"
 )
 
 //can make a custom InvoiceDetail slice that includes models.Product so that I can parse it from
