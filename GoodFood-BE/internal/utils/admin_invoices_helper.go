@@ -8,56 +8,56 @@ import (
 	"time"
 
 	"github.com/aarondl/null/v8"
-	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries"
+	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"
 	"gopkg.in/gomail.v2"
 )
 
-//These constants define allowed invoice statuses
-const(
-	StatusOrderPlaced = "Order Placed"
-	StatusCancelled = "Cancelled"
+// These constants define allowed invoice statuses
+const (
+	StatusOrderPlaced    = "Order Placed"
+	StatusCancelled      = "Cancelled"
 	StatusOrderConfirmed = "Order Confirmed"
-	StatusProcessing = "Order Processing"
-	StatusShipping = "Shipping"
-	StatusDelivered = "Delivered"
+	StatusProcessing     = "Order Processing"
+	StatusShipping       = "Shipping"
+	StatusDelivered      = "Delivered"
 )
 
 // FetchInvoiceCards gets summary stats (total, canceled).
-func FetchInvoiceCards(c *fiber.Ctx) (dto.InvoiceCards, error){
+func FetchInvoiceCards(c *fiber.Ctx) (dto.InvoiceCards, error) {
 	cards := dto.InvoiceCards{}
 	err := queries.Raw(`
 		SELECT COALESCE(COUNT("invoiceID"),0) AS total,
 		COUNT(CASE WHEN "invoiceStatusID" = 6 THEN 1 END) AS canceled
 		FROM invoice
-	`).Bind(c.Context(),boil.GetContextDB(),&cards);
+	`).Bind(c.Context(), boil.GetContextDB(), &cards)
 
 	return cards, err
 }
 
 // ParseDateRange validates and parses date strings (returns zero time if empty).
-func ParseDateRange(dateFromStr string, dateToStr string) (time.Time, time.Time, error){
+func ParseDateRange(dateFromStr string, dateToStr string) (time.Time, time.Time, error) {
 	var dateFrom, dateTo time.Time
 	var err error
-	if dateFromStr != ""{
-		dateFrom, err = time.Parse("2006-01-02",dateFromStr);
-		if err != nil{
-			return time.Time{},time.Time{},errors.New("Invalid format for dateFrom (expect yyyy-mm-dd)")
+	if dateFromStr != "" {
+		dateFrom, err = time.Parse("2006-01-02", dateFromStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom (expect yyyy-mm-dd)")
 		}
 	}
-	if dateToStr != ""{
-		dateTo, err = time.Parse("2006-01-02",dateToStr);
-		if err != nil{
-			return time.Time{},time.Time{},errors.New("Invalid format for dateFrom (expect yyyy-mm-dd)")
+	if dateToStr != "" {
+		dateTo, err = time.Parse("2006-01-02", dateToStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom (expect yyyy-mm-dd)")
 		}
 	}
-	return dateFrom,dateTo,nil
+	return dateFrom, dateTo, nil
 }
 
-//BuildInvoiceFilters builds filtering logic for search/sort/date
-func BuildInvoiceFilters(c *fiber.Ctx, search, sort string, dateFrom, dateTo time.Time)([]qm.QueryMod,[]qm.QueryMod,error){
+// BuildInvoiceFilters builds filtering logic for search/sort/date
+func BuildInvoiceFilters(c *fiber.Ctx, search, sort string, dateFrom, dateTo time.Time) ([]qm.QueryMod, []qm.QueryMod, error) {
 	queryMods := []qm.QueryMod{
 		qm.Load(models.InvoiceRels.InvoiceStatusIDInvoiceStatus),
 		qm.OrderBy("\"invoiceID\" DESC"),
@@ -75,7 +75,7 @@ func BuildInvoiceFilters(c *fiber.Ctx, search, sort string, dateFrom, dateTo tim
 		case "Invoice status":
 			status, err := models.InvoiceStatuses(qm.Where("\"statusName\" ILIKE ?", "%"+search+"%")).One(c.Context(), boil.GetContextDB())
 			if err != nil {
-				return nil,nil,err
+				return nil, nil, err
 			}
 			queryMods = append(queryMods, qm.Where("\"invoiceStatusID\" = ?", status.InvoiceStatusID))
 			queryModsTotal = append(queryModsTotal, qm.Where("\"invoiceStatusID\" = ?", status.InvoiceStatusID))
@@ -86,60 +86,60 @@ func BuildInvoiceFilters(c *fiber.Ctx, search, sort string, dateFrom, dateTo tim
 		queryMods = append(queryMods, qm.Where("DATE(\"createdAt\") BETWEEN ? AND ?", dateFrom, dateTo))
 		queryModsTotal = append(queryModsTotal, qm.Where("DATE(\"createdAt\") BETWEEN ? AND ?", dateFrom, dateTo))
 	}
-	
-	return queryMods,queryModsTotal, nil
+
+	return queryMods, queryModsTotal, nil
 }
 
-func MapInvoices(invoices []*models.Invoice) []dto.InvoiceResponse{
-	res := make([]dto.InvoiceResponse, len(invoices));
-	for i, invoice := range invoices{
+func MapInvoices(invoices []*models.Invoice) []dto.InvoiceResponse {
+	res := make([]dto.InvoiceResponse, len(invoices))
+	for i, invoice := range invoices {
 		res[i] = dto.InvoiceResponse{
-			Invoice: *invoice,
+			Invoice:       *invoice,
 			InvoiceStatus: invoice.R.InvoiceStatusIDInvoiceStatus,
 		}
 	}
-	return res;
+	return res
 }
 
 // FetchInvoiceAndStatus loads an invoice and its current status.
-func FetchInvoiceAndStatus(c *fiber.Ctx, invoiceID int)(*models.Invoice, *models.InvoiceStatus, error){
-	invoice, err := models.Invoices(qm.Where("\"invoiceID\" = ?",invoiceID)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return nil,nil,err
+func FetchInvoiceAndStatus(c *fiber.Ctx, invoiceID int) (*models.Invoice, *models.InvoiceStatus, error) {
+	invoice, err := models.Invoices(qm.Where("\"invoiceID\" = ?", invoiceID)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return nil, nil, err
 	}
-	status, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?",invoice.InvoiceStatusID)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return nil,nil,err
+	status, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?", invoice.InvoiceStatusID)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return invoice, status, nil
 }
 
 // FetchStatusProgression builds the next possible statuses based on current status.
-func FetchStatusProgression(c *fiber.Ctx, status *models.InvoiceStatus)([]*models.InvoiceStatus,error){
+func FetchStatusProgression(c *fiber.Ctx, status *models.InvoiceStatus) ([]*models.InvoiceStatus, error) {
 	var queryMods []qm.QueryMod
 
-	switch(status.StatusName){
-		case StatusOrderPlaced:
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ? OR \"statusName\" LIKE ?",status.StatusName,"Cancelled","Order Confirmed"))
-		case StatusOrderConfirmed:
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",status.StatusName,"Order Processing"))
-		case StatusProcessing:
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",status.StatusName,"Shipping"))
-		case StatusShipping:
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?",status.StatusName,"Delivered"))
-		case StatusDelivered:
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ?",status.StatusName))
-		default:
-			// fallback: return only current status
-			queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ?",status.StatusName))
+	switch status.StatusName {
+	case StatusOrderPlaced:
+		queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ? OR \"statusName\" LIKE ?", status.StatusName, "Cancelled", "Order Confirmed"))
+	case StatusOrderConfirmed:
+		queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?", status.StatusName, "Order Processing"))
+	case StatusProcessing:
+		queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?", status.StatusName, "Shipping"))
+	case StatusShipping:
+		queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ? OR \"statusName\" LIKE ?", status.StatusName, "Delivered"))
+	case StatusDelivered:
+		queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ?", status.StatusName))
+	default:
+		// fallback: return only current status
+		queryMods = append(queryMods, qm.Where("\"statusName\" LIKE ?", status.StatusName))
 	}
 
-	return models.InvoiceStatuses(queryMods...).All(c.Context(),boil.GetContextDB());
+	return models.InvoiceStatuses(queryMods...).All(c.Context(), boil.GetContextDB())
 }
 
 // FetchInvoiceDetails loads invoice details with joined product and customer info.
-func FetchInvoiceDetails(c *fiber.Ctx, invoiceID int)([]*dto.InvoiceDetailResponse, error){
+func FetchInvoiceDetails(c *fiber.Ctx, invoiceID int) ([]*dto.InvoiceDetailResponse, error) {
 	details := []*dto.InvoiceDetailResponse{}
 	err := queries.Raw(`
 		SELECT invoice_detail.*,
@@ -151,8 +151,8 @@ func FetchInvoiceDetails(c *fiber.Ctx, invoiceID int)([]*dto.InvoiceDetailRespon
 		INNER JOIN invoice_detail ON invoice."invoiceID" = invoice_detail."invoiceID"
 		INNER JOIN product ON invoice_detail."productID" = product."productID"
 		WHERE invoice_detail."invoiceID" = $1
-	`,invoiceID).Bind(c.Context(),boil.GetContextDB(),&details);
-	if err != nil{
+	`, invoiceID).Bind(c.Context(), boil.GetContextDB(), &details)
+	if err != nil {
 		return nil, err
 	}
 
@@ -160,45 +160,45 @@ func FetchInvoiceDetails(c *fiber.Ctx, invoiceID int)([]*dto.InvoiceDetailRespon
 }
 
 // UpdateInvoiceStatus updates an invoice's status with business rules applied.
-func UpdateInvoiceStatus(c *fiber.Ctx, invoiceID int, status dto.UpdateInvoiceStruct)(*models.Invoice,error){
+func UpdateInvoiceStatus(c *fiber.Ctx, invoiceID int, status dto.UpdateInvoiceStruct) (*models.Invoice, error) {
 	//Find status record
-	invoiceStatus, err := models.InvoiceStatuses(qm.Where("\"statusName\" LIKE ?",status.StatusName)).One(c.Context(),boil.GetContextDB())
-	if err != nil{
+	invoiceStatus, err := models.InvoiceStatuses(qm.Where("\"statusName\" LIKE ?", status.StatusName)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
 		return nil, err
 	}
 
 	//Find invoice
-	invoice,err := models.Invoices(
-		qm.Where("\"invoiceID\" = ?",invoiceID),
+	invoice, err := models.Invoices(
+		qm.Where("\"invoiceID\" = ?", invoiceID),
 		qm.Load(models.InvoiceRels.AccountIDAccount),
-	).One(c.Context(),boil.GetContextDB())
-	if err != nil{
-		return nil,err
+	).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return nil, err
 	}
 
 	//Apply business logicc
-	if invoice.InvoiceStatusID != invoiceStatus.InvoiceStatusID && invoiceStatus.InvoiceStatusID != 6{
+	if invoice.InvoiceStatusID != invoiceStatus.InvoiceStatusID && invoiceStatus.InvoiceStatusID != 6 {
 		invoice.InvoiceStatusID += 1
 	}
 	//invoiceStatusID reaches 5 meaning the order has been delivered, meaning invoice status is paid.
-	if invoiceStatus.InvoiceStatusID == 5{
+	if invoiceStatus.InvoiceStatusID == 5 {
 		invoice.InvoiceStatusID = 5
-		invoice.Status = true;
+		invoice.Status = true
 	}
 	//invoiceStatusID reaches 6 meaning the order has been cancelled, also sends an email clarifying the
 	//cancelation
-	if invoiceStatus.InvoiceStatusID == 6{
+	if invoiceStatus.InvoiceStatusID == 6 {
 		invoice.InvoiceStatusID = 6
 		invoice.CancelReason = null.String(status.CancelReason)
-		err := SendOrderCancelEmail(invoice.R.AccountIDAccount.Email,invoice.CancelReason.String,invoice.Status);
-		if err != nil{
+		err := SendOrderCancelEmail(invoice.R.AccountIDAccount.Email, invoice.CancelReason.String, invoice.Status)
+		if err != nil {
 			return nil, err
 		}
 	}
-	
+
 	//Update DB
-	_,err = invoice.Update(c.Context(),boil.GetContextDB(),boil.Infer())
-	if err != nil{
+	_, err = invoice.Update(c.Context(), boil.GetContextDB(), boil.Infer())
+	if err != nil {
 		return nil, err
 	}
 

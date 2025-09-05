@@ -10,9 +10,10 @@ import (
 	"fmt"
 	"math"
 	"time"
-	"github.com/gofiber/fiber/v2"
+
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/gofiber/fiber/v2"
 )
 
 //GetAdminReview fetches paginated list of reviews from DB, also sending the list over to microservice flask for sentiment analysis then cache into redis.

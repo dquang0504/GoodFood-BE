@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/service"
+
+	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/gofiber/fiber/v2"
 	"github.com/aarondl/sqlboiler/v4/boil"
-	"github.com/aarondl/sqlboiler/v4/queries"
 )
 
 type DashboardValues struct{

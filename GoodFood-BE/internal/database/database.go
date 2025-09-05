@@ -8,9 +8,10 @@ import (
 	"os"
 	"strconv"
 	"time"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
-	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/boil"
 )
 
 // Service interface represents a service that interacts with a database.
@@ -41,8 +42,10 @@ var (
 func New() Service {
 	// Reuse Connection
 	if dbInstance != nil {
-		return dbInstance
-	}
+        fmt.Println("Reusing DB instance:", dbInstance)
+        fmt.Println("boil context inside New():", boil.GetContextDB())
+        return dbInstance
+    }
 	//connection string
 	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=%s", username, password, host, port, database, schema)
 	//connect to db
@@ -53,6 +56,7 @@ func New() Service {
 
 	//sqlboiler config
 	boil.SetDB(db)
+	fmt.Println("boil context after SetDB:", boil.GetContextDB())
 
 	dbInstance = &service{
 		db: db,

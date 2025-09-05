@@ -5,9 +5,10 @@ import (
 	"GoodFood-BE/models"
 	"fmt"
 	"math"
-	"github.com/gofiber/fiber/v2"
+
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/gofiber/fiber/v2"
 )
 
 //This function is used to fetch the address(es) of the requesting user.
@@ -37,7 +38,7 @@ func FetchAddress(c *fiber.Ctx) error{
 		qm.OrderBy("\"addressID\" DESC"),
 	).All(c.Context(),boil.GetContextDB());
 	if err != nil{
-		return service.SendError(c,500,"Error fetching addresses");
+		return service.SendError(c,500,err.Error());
 	}
 
 	//Count total addresses to calculate totalPage.

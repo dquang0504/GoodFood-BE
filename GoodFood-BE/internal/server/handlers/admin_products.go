@@ -7,9 +7,10 @@ import (
 	"GoodFood-BE/models"
 	"database/sql"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
+
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/gofiber/fiber/v2"
 )
 
 //GetAdminProductsData fetches products with pagination, sorting, searching.

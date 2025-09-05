@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/gofiber/fiber/v2"
 )
 
 type CartDetailResponse struct{

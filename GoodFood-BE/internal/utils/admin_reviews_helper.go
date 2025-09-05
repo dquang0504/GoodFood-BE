@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-resty/resty/v2"
-	"github.com/gofiber/fiber/v2"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/go-resty/resty/v2"
+	"github.com/gofiber/fiber/v2"
 )
 
 // BuildReviewFilters constructs query mods based on search & sort params

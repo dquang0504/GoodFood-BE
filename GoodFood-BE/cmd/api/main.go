@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/aarondl/sqlboiler/v4/boil"
 )
 
 func gracefulShutdown(fiberServer *server.FiberServer, dbService database.Service, done chan bool) {
@@ -50,6 +52,11 @@ var ctx = context.Background()
 func main() {
 	//Initialize database connection
 	dbService := database.New()
+	if boil.GetContextDB() == nil {
+    	log.Fatal("boil.GetContextDB() is nil after database.New()")
+	}
+	fmt.Println(boil.GetContextDB())
+	fmt.Println("wtf")
 	defer dbService.Close()
 
 	//Check database health

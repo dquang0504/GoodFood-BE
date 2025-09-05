@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/aarondl/null/v8"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofrs/uuid"
 	"github.com/hibiken/asynq"
-	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"golang.org/x/crypto/bcrypt"
