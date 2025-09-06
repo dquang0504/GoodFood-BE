@@ -14,7 +14,6 @@ import (
 //This function is used to fetch the address(es) of the requesting user.
 //Returns a list of paginated address(es).
 func FetchAddress(c *fiber.Ctx) error{
-
 	const pageSize = 6; //fixed pageSize due to UI design constraint.
 
 	//Parse query params.
