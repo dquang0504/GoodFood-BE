@@ -3,13 +3,14 @@ package integration
 import (
 	"GoodFood-BE/internal/server/handlers"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 )
-
 
 func setupApp() *fiber.App {
 	app := fiber.New()
@@ -28,59 +29,188 @@ func setupApp() *fiber.App {
 func TestFetchAddress(t *testing.T) {
 	app := setupApp()
 
-	// Cleanup before seeding
-	_, err := testdb.Exec(`
-		TRUNCATE TABLE public.address,
-		                 public.ward,
-		                 public.district,
-		                 public.province,
-		                 public.account
-		RESTART IDENTITY CASCADE
-	`)
+	//Table tests setup
+	tests := []struct {
+		name       string
+		url        string
+		seedData   func()
+		wantStatus int
+		wantMsg    string
+		checkData  bool
+	}{
+		{
+			name:       "Missing accountID",
+			url:        "/address/fetch?page=1",
+			seedData:   func() {},
+			wantStatus: http.StatusBadRequest,
+			wantMsg:    "Did not receive accountID",
+			checkData:  false,
+		},
+		{
+			name:       "Missing page",
+			url:        "/address/fetch?accountID=1",
+			seedData:   func() {},
+			wantStatus: http.StatusBadRequest,
+			wantMsg:    "Did not receive pageNum",
+			checkData:  false,
+		},
+		{
+			name: "Account has no address",
+			url:  "/address/fetch?accountID=1&page=1",
+			seedData: func() {
+				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, false, false, false, &AddressSeed{seedAddress: false, numberOfRecords: 0})
+			},
+			wantStatus: http.StatusOK,
+			wantMsg:    "Successfully fetched addresses",
+			checkData:  true,
+		},
+		{
+			name: "Account has address",
+			url:  "/address/fetch?accountID=1&page=1",
+			seedData: func() {
+				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 1})
+			},
+			wantStatus: http.StatusOK,
+			wantMsg:    "Successfully fetched addresses",
+			checkData:  true,
+		},
+	}
+
+	//Run test
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			//Seed data
+			tt.seedData()
+
+			//Send requests
+			req := httptest.NewRequest("GET", tt.url, nil)
+			resp, _ := app.Test(req, -1)
+
+			//Check status
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+
+			var body map[string]interface{}
+			_ = json.NewDecoder(resp.Body).Decode(&body)
+
+			//Check message
+			assert.Equal(t, tt.wantMsg, body["message"])
+
+			//Check data
+			if tt.checkData {
+				assert.Contains(t, body, "data")
+			}
+
+		})
+	}
+}
+
+func TestFetchAddress_Pagination(t *testing.T){
+	app := setupApp()
+
+	//Seed 12 records into table Address for pagination test
+	seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 1},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 12})
+
+	tests := []struct{
+		name string
+		page int
+		wantLen int
+		wantTotal float64
+	}{
+		{
+			name: "Page 1 returns 6 addresses",
+			page: 1,
+			wantLen: 6,
+			wantTotal: 2,
+		},
+		{
+			name: "Page 2 returns next 6 addresses",
+			page: 2,
+			wantLen: 6,
+			wantTotal: 2,
+		},
+		{
+			name: "Page 3 returns empty list",
+			page: 3,
+			wantLen: 0,
+			wantTotal: 2,
+		},
+	}
+
+	for _,tt := range tests{
+		t.Run(tt.name, func(t *testing.T) {
+			url := fmt.Sprintf("/address/fetch?accountID=1&page=%d", tt.page)
+			req := httptest.NewRequest("GET", url, nil)
+			resp, _ := app.Test(req, -1)
+
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var body map[string]interface{}
+			_ = json.NewDecoder(resp.Body).Decode(&body)
+
+			// Check length of data
+			data := body["data"].([]interface{})
+			assert.Len(t, data, tt.wantLen)
+
+			// Check totalPage
+			assert.Equal(t, tt.wantTotal, body["totalPage"])
+		})
+	}
+}
+
+func seedData(t *testing.T, accountSeed *AccountSeed, withWard bool, withDistrict bool, withProvince bool, addressSeed *AddressSeed) {
+	//Reset tables data
+	_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
 	assert.NoError(t, err)
 
-	// Seed data test
-	//mock data for account table
-	_, err = testdb.Exec(`
-		INSERT INTO public.account (username,password,"phoneNumber",email,"fullName",gender,avatar,status,role,"emailVerified") 
-		VALUES ('quang','e10adc3949ba59abbe56e057f20f883e','0799607411','quang@gmail.com','Đặng Duy Quang', true, 'quang.jpg', true, true, true)
-	`)
-	assert.NoError(t, err)
-	//Mock data for ward, district and province tables
-	_, err = testdb.Exec(`
-		INSERT INTO public.province ("provinceCode", "provinceName")
-		VALUES (79, 'Hồ Chí Minh')
-	`)
-	assert.NoError(t, err)
-	_, err = testdb.Exec(`
-		INSERT INTO public.district ("districtCode", "districtName", "provinceID")
-		VALUES (760, 'Quận 1', 1)
-	`)
-	assert.NoError(t, err)
-	_, err = testdb.Exec(`
-		INSERT INTO public.ward ("wardCode", "wardName", "districtID")
-		VALUES (26734, 'Phường Bến Nghé', 1)
-	`)
-	assert.NoError(t, err)
+	//Seed data for table account
+	if accountSeed.seedAccount {
+		_, err := testdb.Exec(`INSERT INTO account (username,password,"phoneNumber",email,"fullName",gender,avatar,status,role,"emailVerified") 
+		VALUES('user', 'pwd', '000', 'u@mail.com', 'Test User', true, '', true, true, true)`)
+		assert.NoError(t, err)
+	}
+	//Seed data for table province
+	if withProvince {
+		_, err = testdb.Exec(`INSERT INTO province ("provinceCode", "provinceName") VALUES (79, 'HCM')`)
+		assert.NoError(t, err)
+	}
+	//Seed data for table district
+	if withDistrict {
+		_, err = testdb.Exec(`INSERT INTO district ("districtCode", "districtName", "provinceID") VALUES (760, 'Q1', 1)`)
+		assert.NoError(t, err)
+	}
+	//Seed data for table ward
+	if withWard {
+		_, err = testdb.Exec(`INSERT INTO ward ("wardCode", "wardName", "districtID") VALUES (26734, 'BN', 1)`)
+		assert.NoError(t, err)
+	}
+	//Seed data for table address
+	if addressSeed.seedAddress {
+		// Ensure prerequisites are seeded
+		if !(withProvince && withDistrict && withWard && accountSeed.seedAccount) {
+			t.Fatal("Cannot seed address without province, district, ward, and account")
+		}
+		for i := 0; i < addressSeed.numberOfRecords; i++ {
+			_, err := testdb.Exec(`
+			INSERT INTO address 
+			("phoneNumber","fullName",address,"specificAddress",status,"provinceID","districtID","wardID","deleteStatus","accountID","wardCode") 
+			VALUES ($1,$2,$3,$4,true,1,1,1,true,1,true)`,
+				"000",
+				fmt.Sprintf("User %d", i+1),
+				fmt.Sprintf("Addr %d", i+1),
+				fmt.Sprintf("Addr detail %d", i+1),
+			)
+			assert.NoError(t, err)
+		}
+	}
 
-	//Mock data for address table
-	_, err = testdb.Exec(`
-		INSERT INTO public.address ("phoneNumber","fullName",address,"specificAddress",status,"provinceID","districtID","wardID","deleteStatus","accountID","wardCode") 
-		VALUES ('0799607411','Đặng Duy Quang','444/38/25D CMT9','444/38/25D CMT9, Bui Huu Nghia, Binh Thuy, Can Tho',true, 1, 1, 1, true,1, true)
-	`)
-	assert.NoError(t, err)
+}
 
-	req := httptest.NewRequest("GET", "/address/fetch?accountID=1317231&page=1", nil)
-	resp, _ := app.Test(req, -1)
+type AccountSeed struct {
+	seedAccount     bool
+	numberOfRecords int
+}
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var body map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&body)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "Success", body["status"])
-	assert.Contains(t, body, "data")
-	assert.Equal(t, "Successfully fetched addresses", body["message"])
-	assert.NotEmpty(t, body["data"])
+type AddressSeed struct {
+	seedAddress     bool
+	numberOfRecords int
 }

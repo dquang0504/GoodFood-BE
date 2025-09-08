@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,6 +23,25 @@ import (
 	"google.golang.org/genai"
 	"gopkg.in/gomail.v2"
 )
+
+func Paginate(page, pageSize, totalRecords int) (offset int,totalPage int){
+	if page <= 0{
+		page = 1
+	}
+
+	if pageSize <= 0{
+		pageSize = 6 //default
+	}
+
+	offset = (page - 1) * pageSize
+
+	if totalRecords == 0{
+		totalPage = 0
+	}else{
+		totalPage = int(math.Ceil(float64(totalRecords)/float64(pageSize)))
+	}
+	return offset,totalPage
+}
 
 func SendResetPasswordEmail(toEmail string, resetLink string) error{
 	mailer := gomail.NewMessage();
