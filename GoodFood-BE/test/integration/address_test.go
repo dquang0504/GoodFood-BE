@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -100,6 +101,10 @@ func TestFetchAddress(t *testing.T) {
 				assert.Contains(t, body, "data")
 			}
 
+			//Reset tables data
+			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			assert.NoError(t, err)
+
 		})
 	}
 }
@@ -157,16 +162,294 @@ func TestFetchAddress_Pagination(t *testing.T){
 	}
 }
 
+func TestAddressInsert(t *testing.T){
+	app := setupApp();
+
+	tests := []struct{
+		name string
+		body string
+		seedData func()
+		wantStatus int
+		wantMsg string
+		checkData bool
+	}{
+		{
+			name: "Invalid JSON body",
+			body: `{"phoneNumber:"000"`, //missing closing curly brace
+			seedData: func() {},
+			wantStatus: http.StatusBadRequest,
+			wantMsg: "Invalid request body",
+			checkData: false,
+		},
+		{
+			name: "Insert failed due to missing foreign keys",
+			body: `{
+				"phoneNumber": "000",
+				"fullName": "Test User",
+				"address": "Addr 1",
+				"specificAddress": "Addr detail 1",
+				"status": true,
+				"provinceID": 1,
+				"districtID": 1,
+				"wardID": 1,
+				"accountID": 1,
+				"wardCode": "550300",
+				"deleteStatus": false
+			}`,
+			seedData: func() {},
+			wantStatus: http.StatusInternalServerError,
+			wantMsg: "Couldn't insert new address",
+			checkData: false,
+		},
+		{
+			name: "Insert succeeds",
+			body: `{
+				"phoneNumber": "000",
+				"fullName": "Test User",
+				"address": "Addr 1",
+				"specificAddress": "Addr detail 1",
+				"status": true,
+				"provinceID": 1,
+				"districtID": 1,
+				"wardID": 1,
+				"accountID": 1,
+				"wardCode": "26734",
+				"deleteStatus": false
+			}`,
+			seedData: func(){seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 1},true,true,true,&AddressSeed{seedAddress: false,numberOfRecords: 0})},
+			wantStatus: http.StatusOK,
+			wantMsg: "Successfully inserted new address",
+			checkData: true,
+		},
+	}
+
+	for _,tt := range tests{
+		t.Run(tt.name,func(t *testing.T) {
+
+			tt.seedData();
+
+			//Send request
+			req := httptest.NewRequest("POST","/address/insert",strings.NewReader(tt.body))
+			req.Header.Set("Content-Type","application/json")
+
+			resp, _ := app.Test(req, -1)
+			//Check status
+			assert.Equal(t,tt.wantStatus,resp.StatusCode)
+
+			var body map[string]interface{}
+			//Parse response
+			_ = json.NewDecoder(resp.Body).Decode(&body)
+
+			//Check message
+			assert.Equal(t,tt.wantMsg,body["message"])
+
+			if tt.checkData{
+				assert.Contains(t, body, "data")
+				// assert.Equal(t,"000",body["data"].(map[string]interface{})["phoneNumber"])
+			}
+
+			//Reset tables data
+			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestAddressDetail(t *testing.T){
+	app := setupApp();
+
+	tests := []struct{
+		name string
+		url string
+		seedData func()
+		wantStatus int
+		wantMsg string
+		checkData bool
+	}{
+		{
+			name: "Missing accountID",
+			url: "/address/detail?addressID=1",
+			seedData: func(){},
+			wantStatus: http.StatusBadRequest,
+			wantMsg: "Did not receive accountID",
+			checkData: false,
+		},
+		{
+			name: "Missing addressID",
+			url: "/address/detail?accountID=1",
+			seedData: func(){},
+			wantStatus: http.StatusBadRequest,
+			wantMsg: "Did not receive addressID",
+			checkData: false,
+		},
+		{
+			name: "Address does not exist",
+			url: "/address/detail?accountID=1&addressID=1",
+			seedData: func(){},
+			wantStatus: http.StatusNotFound,
+			wantMsg: "Address not found",
+			checkData: false,
+		},
+		{
+			name: "Unauthorized access (address belongs to another account)",
+			url: "/address/detail?addressID=1&accountID=2",
+			seedData: func(){seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 2},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 2})},
+			wantStatus: http.StatusForbidden,
+			wantMsg: "Address belongs to another account!",
+			checkData: false,
+		},
+		{
+			name: "Fetch address details successfully",
+			url: "/address/detail?addressID=1&accountID=1",
+			seedData: func(){seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 1},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 1})},
+			wantStatus: http.StatusOK,
+			wantMsg: "Successfully fetched address details",
+			checkData: true,
+		},
+	}
+
+	//Run test
+	for _, tt := range tests{
+		t.Run(tt.name,func(t *testing.T) {
+			tt.seedData();
+			req := httptest.NewRequest("GET",tt.url,nil);
+			resp,_ := app.Test(req,-1);
+
+			var body map[string]interface{};
+			_ = json.NewDecoder(resp.Body).Decode(&body);
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			assert.Equal(t, tt.wantMsg, body["message"]);
+
+			if tt.checkData{
+				assert.Contains(t, body, "data")
+			}
+
+			_,err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			assert.NoError(t,err);
+		})
+	}
+}
+
+func TestAddressUpdate(t *testing.T){
+	app := setupApp();
+
+	tests := []struct{
+		name string
+		url string
+		body string
+		seedData func()
+		wantStatus int
+		wantMsg string
+		checkData bool
+	}{
+		{
+			name: "Missing accountID",
+			url: "/address/update?addressID=1",
+			seedData: func(){},
+			wantStatus: http.StatusBadRequest,
+			wantMsg: "Did not receive accountID",
+			checkData: false,
+		},
+		{
+			name: "Missing addressID",
+			url: "/address/update?accountID=1",
+			seedData: func(){},
+			wantStatus: http.StatusBadRequest,
+			wantMsg: "Did not receive addressID",
+			checkData: false,
+		},
+		{
+			name: "Invalid body request",
+			url: "/address/update?accountID=1&addressID=1",
+			body: `{
+				phoneNumber: "000"
+			}`,
+			seedData: func(){},
+			wantStatus: http.StatusBadRequest,
+			wantMsg: "Invalid body request",
+			checkData: false,
+		},
+		{
+			name: "Address does not exist",
+			url: "/address/update?accountID=1&addressID=1",
+			body: `{
+				"addressID": 1,
+				"phoneNumber": "000",
+				"fullName": "Test User",
+				"address": "Addr 1",
+				"specificAddress": "Addr detail 1",
+				"status": true,
+				"provinceID": 1,
+				"districtID": 1,
+				"wardID": 1,
+				"accountID": 1,
+				"wardCode": "550300",
+				"deleteStatus": false
+			}`,
+			seedData: func(){},
+			wantStatus: http.StatusNotFound,
+			wantMsg: "Address not found",
+			checkData: false,
+		},
+		{
+			name: "Unauthorized access (address belongs to another account)",
+			url: "/address/update?addressID=1&accountID=2",
+			seedData: func(){seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 2},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 2})},
+			wantStatus: http.StatusForbidden,
+			wantMsg: "Address belongs to another account!",
+			checkData: false,
+		},
+		// {
+		// 	name: "Fetch address details successfully",
+		// 	url: "/address/updatel?addressID=1&accountID=1",
+		// 	seedData: func(){seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 1},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 1})},
+		// 	wantStatus: http.StatusOK,
+		// 	wantMsg: "Successfully fetched address details",
+		// 	checkData: true,
+		// },
+	}
+
+	//Run test
+	for _, tt := range tests{
+		t.Run(tt.name,func(t *testing.T) {
+			tt.seedData();
+			req := httptest.NewRequest("PUT",tt.url,strings.NewReader(tt.body));
+			req.Header.Set("Content-Type","application/json")
+			resp,_ := app.Test(req,-1);
+
+			var body map[string]interface{};
+			_ = json.NewDecoder(resp.Body).Decode(&body);
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			assert.Equal(t, tt.wantMsg, body["message"]);
+
+			if tt.checkData{
+				assert.Contains(t, body, "data")
+			}
+
+			_,err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			assert.NoError(t,err);
+		})
+	}
+
+}
+
 func seedData(t *testing.T, accountSeed *AccountSeed, withWard bool, withDistrict bool, withProvince bool, addressSeed *AddressSeed) {
 	//Reset tables data
 	_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
 	assert.NoError(t, err)
+	
 
 	//Seed data for table account
 	if accountSeed.seedAccount {
-		_, err := testdb.Exec(`INSERT INTO account (username,password,"phoneNumber",email,"fullName",gender,avatar,status,role,"emailVerified") 
-		VALUES('user', 'pwd', '000', 'u@mail.com', 'Test User', true, '', true, true, true)`)
-		assert.NoError(t, err)
+		for i:= 0; i < accountSeed.numberOfRecords; i++{
+			_, err := testdb.Exec(`INSERT INTO account (username,password,"phoneNumber",email,"fullName",gender,avatar,status,role,"emailVerified") 
+			VALUES($1, 'pwd', $2, $3, 'Test User', true, '', true, true, true)`,
+				fmt.Sprintf("user%d",i),fmt.Sprintf("00%d",i),fmt.Sprintf("u%d@gmail.com",i),
+			)
+			assert.NoError(t, err)
+		}
 	}
 	//Seed data for table province
 	if withProvince {
@@ -180,7 +463,7 @@ func seedData(t *testing.T, accountSeed *AccountSeed, withWard bool, withDistric
 	}
 	//Seed data for table ward
 	if withWard {
-		_, err = testdb.Exec(`INSERT INTO ward ("wardCode", "wardName", "districtID") VALUES (26734, 'BN', 1)`)
+		_, err = testdb.Exec(`INSERT INTO ward ("wardCode", "wardName", "districtID") VALUES ('26734', 'BN', 1)`)
 		assert.NoError(t, err)
 	}
 	//Seed data for table address
@@ -193,7 +476,7 @@ func seedData(t *testing.T, accountSeed *AccountSeed, withWard bool, withDistric
 			_, err := testdb.Exec(`
 			INSERT INTO address 
 			("phoneNumber","fullName",address,"specificAddress",status,"provinceID","districtID","wardID","deleteStatus","accountID","wardCode") 
-			VALUES ($1,$2,$3,$4,true,1,1,1,true,1,true)`,
+			VALUES ($1,$2,$3,$4,true,1,1,1,true,1,'26734')`,
 				"000",
 				fmt.Sprintf("User %d", i+1),
 				fmt.Sprintf("Addr %d", i+1),

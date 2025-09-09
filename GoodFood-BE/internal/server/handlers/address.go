@@ -73,7 +73,7 @@ func AddressInsert(c *fiber.Ctx) error {
 	//Insert
 	if err := addressDetails.Insert(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
 		fmt.Printf("Insert error: %+v\n", err.Error())
-		return service.SendError(c, 500, "Couldnt insert new address")
+		return service.SendError(c, 500, "Couldn't insert new address")
 	}
 
 	resp := fiber.Map{
@@ -95,12 +95,16 @@ func AddressDetail(c *fiber.Ctx) error {
 	}
 	accountID := c.QueryInt("accountID", 0)
 	if accountID == 0 {
-		return service.SendError(c, 400, "Did not receive addressID")
+		return service.SendError(c, 400, "Did not receive accountID")
 	}
 
-	addressDetail, err := models.Addresses(qm.Where("\"addressID\" = ? AND \"accountID\" = ?", addressID, accountID)).One(c.Context(), boil.GetContextDB())
-	if err != nil {
-		return service.SendError(c, 404, "Error fetching address details")
+	addressDetail, err := models.Addresses(qm.Where("\"addressID\" = ?",addressID)).One(c.Context(),boil.GetContextDB());
+	if err != nil{
+		return service.SendError(c,404,"Address not found");
+	}
+
+	if addressDetail.AccountID != accountID{
+		return service.SendError(c, 403, "Address belongs to another account!")
 	}
 
 	resp := fiber.Map{
@@ -132,11 +136,16 @@ func AddressUpdate(c *fiber.Ctx) error {
 
 	//Look for the to be updated address.
 	toBeUpdated, err := models.Addresses(
-		qm.Where("\"accountID\" = ? AND \"addressID\" = ?", accountID, addressID),
+		qm.Where("\"addressID\" = ?", addressID),
 	).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c, 500, "Cannot find the specified address")
+		return service.SendError(c, 404, "Address not found")
 	}
+	
+	if toBeUpdated.AccountID != accountID{
+		return service.SendError(c, 403, "Address belongs to another account!")
+	}
+
 
 	//Update details
 	toBeUpdated.Address = updateDetails.Address
@@ -179,7 +188,7 @@ func AddressDelete(c *fiber.Ctx) error {
 		qm.Where("\"accountID\" = ? AND \"addressID\" = ?", accountID, addressID),
 	).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c, 500, "Cannot find the specified address")
+		return service.SendError(c, 404, "Cannot find the specified address")
 	}
 	_, err = toBeDeleted.Delete(c.Context(), boil.GetContextDB())
 	if err != nil {
