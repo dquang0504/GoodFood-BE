@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"GoodFood-BE/internal/server/handlers"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,26 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 )
 
-func setupApp() *fiber.App {
-	app := fiber.New()
-
-	app.Get("/address/fetch", handlers.FetchAddress)
-	app.Post("/address/insert", handlers.AddressInsert)
-	app.Get("/address/detail", handlers.AddressDetail)
-	app.Put("/address/update", handlers.AddressUpdate)
-	app.Delete("/address/delete", handlers.AddressDelete)
-	app.Get("/address/fill", handlers.AddressFill)
-	app.Put("/address/quickChange", handlers.AddressQuickChange)
-
-	return app
-}
-
 func TestFetchAddress(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	//Table tests setup
 	tests := []struct {
@@ -59,7 +43,7 @@ func TestFetchAddress(t *testing.T) {
 			name: "Account has no address",
 			url:  "/address/fetch?accountID=1&page=1",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, false, false, false, &AddressSeed{seedAddress: false, numberOfRecords: 0})
+				SeedData(t, SeedAccountOnly)
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully fetched addresses",
@@ -69,7 +53,7 @@ func TestFetchAddress(t *testing.T) {
 			name: "Account has address",
 			url:  "/address/fetch?accountID=1&page=1",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 1})
+				SeedData(t, SeedMinimalAddress)
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully fetched addresses",
@@ -110,10 +94,16 @@ func TestFetchAddress(t *testing.T) {
 }
 
 func TestFetchAddress_Pagination(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	//Seed 12 records into table Address for pagination test
-	seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 12})
+	SeedData(t, SeedConfig{
+		Accounts: &AccountSeed{seedAccount: true,numberOfRecords: 1},
+		Provinces: true,
+		Districts: true,
+		Wards: true,
+		Addresses: &AddressSeed{seedAddress: true,numberOfRecords: 12},
+	})
 
 	tests := []struct {
 		name      string
@@ -163,7 +153,7 @@ func TestFetchAddress_Pagination(t *testing.T) {
 }
 
 func TestAddressInsert(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	tests := []struct {
 		name       string
@@ -217,7 +207,7 @@ func TestAddressInsert(t *testing.T) {
 				"deleteStatus": false
 			}`,
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: false, numberOfRecords: 0})
+				SeedData(t, SeedConfig{Accounts:&AccountSeed{seedAccount: true, numberOfRecords: 1}, Provinces:true, Districts:true, Wards:true, Addresses:&AddressSeed{seedAddress: false, numberOfRecords: 0}})
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully inserted new address",
@@ -258,7 +248,7 @@ func TestAddressInsert(t *testing.T) {
 }
 
 func TestAddressDetail(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	tests := []struct {
 		name       string
@@ -296,7 +286,7 @@ func TestAddressDetail(t *testing.T) {
 			name: "Unauthorized access (address belongs to another account)",
 			url:  "/address/detail?addressID=1&accountID=2",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 2}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 2})
+				SeedData(t, SeedConfig{Accounts:&AccountSeed{seedAccount: true, numberOfRecords: 2}, Provinces:true, Districts:true, Wards:true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 2}})
 			},
 			wantStatus: http.StatusForbidden,
 			wantMsg:    "Address belongs to another account!",
@@ -306,7 +296,7 @@ func TestAddressDetail(t *testing.T) {
 			name: "Fetch address details successfully",
 			url:  "/address/detail?addressID=1&accountID=1",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 1})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 1}, Provinces: true, Districts:true, Wards:true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 1}})
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully fetched address details",
@@ -338,7 +328,7 @@ func TestAddressDetail(t *testing.T) {
 }
 
 func TestAddressUpdate(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	tests := []struct {
 		name       string
@@ -403,7 +393,7 @@ func TestAddressUpdate(t *testing.T) {
 			url:  "/address/update?addressID=1&accountID=2",
 			body: `{}`,
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 2}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 2})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 2}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 2}})
 			},
 			wantStatus: http.StatusForbidden,
 			wantMsg:    "Address belongs to another account!",
@@ -426,7 +416,7 @@ func TestAddressUpdate(t *testing.T) {
 				"deleteStatus": false
 			}`,
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 1})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 1}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 1}})
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully updated the address",
@@ -461,7 +451,7 @@ func TestAddressUpdate(t *testing.T) {
 }
 
 func TestAddressDelete(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	tests := []struct {
 		name       string
@@ -499,7 +489,7 @@ func TestAddressDelete(t *testing.T) {
 			name: "Unauthorized access (address belongs to another account)",
 			url:  "/address/delete?addressID=1&accountID=2",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 2}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 2})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 2}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 2}})
 			},
 			wantStatus: http.StatusForbidden,
 			wantMsg:    "Address belongs to another account!",
@@ -509,7 +499,7 @@ func TestAddressDelete(t *testing.T) {
 			name: "Deleted address successfully",
 			url:  "/address/delete?addressID=1&accountID=1",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 1})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 1}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 1}})
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully deleted the address",
@@ -544,7 +534,7 @@ func TestAddressDelete(t *testing.T) {
 }
 
 func TestAddressFill(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	tests := []struct {
 		name       string
@@ -574,7 +564,7 @@ func TestAddressFill(t *testing.T) {
 			name: "Fetched fill address successfully",
 			url:  "/address/fill?accountID=1",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 1})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 1}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 1}})
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully fetched the fill address",
@@ -609,7 +599,7 @@ func TestAddressFill(t *testing.T) {
 }
 
 func TestAddressQuickChange(t *testing.T) {
-	app := setupApp()
+	app := SetupApp()
 
 	tests := []struct {
 		name       string
@@ -654,7 +644,7 @@ func TestAddressQuickChange(t *testing.T) {
 		{
 			name: "To-be-updated address does not exist",
 			url:  "/address/quickChange?accountID=1&addressID=2&toBeDisabled=1",
-			seedData:   func() {seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 1},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 1})},
+			seedData:   func() {SeedData(t,SeedConfig{Accounts: &AccountSeed{seedAccount: true,numberOfRecords: 1},Provinces: true,Districts: true,Wards: true,Addresses:&AddressSeed{seedAddress: true,numberOfRecords: 1}})},
 			wantStatus: http.StatusNotFound,
 			wantMsg:    "Cannot find the specified to-be-updated address",
 			checkData:  false,
@@ -662,7 +652,7 @@ func TestAddressQuickChange(t *testing.T) {
 		{
 			name: "To-be-updated address does not exist",
 			url:  "/address/quickChange?accountID=1&addressID=1&toBeDisabled=2",
-			seedData:   func() {seedData(t,&AccountSeed{seedAccount: true,numberOfRecords: 1},true,true,true,&AddressSeed{seedAddress: true,numberOfRecords: 1})},
+			seedData:   func() {SeedData(t,SeedConfig{Accounts:&AccountSeed{seedAccount: true,numberOfRecords: 1},Provinces: true,Districts: true,Wards: true,Addresses: &AddressSeed{seedAddress: true,numberOfRecords: 1}})},
 			wantStatus: http.StatusNotFound,
 			wantMsg:    "Cannot find the specified to-be-disabled address",
 			checkData:  false,
@@ -671,7 +661,7 @@ func TestAddressQuickChange(t *testing.T) {
 			name: "Unauthorized access (address belongs to another account)",
 			url:  "/address/quickChange?addressID=1&accountID=2&toBeDisabled=2",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 2}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 2})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 2}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 2}})
 			},
 			wantStatus: http.StatusForbidden,
 			wantMsg:    "Address belongs to another account!",
@@ -681,7 +671,7 @@ func TestAddressQuickChange(t *testing.T) {
 			name: "Updated address successfully",
 			url:  "/address/quickChange?addressID=1&accountID=1&toBeDisabled=2",
 			seedData: func() {
-				seedData(t, &AccountSeed{seedAccount: true, numberOfRecords: 1}, true, true, true, &AddressSeed{seedAddress: true, numberOfRecords: 2})
+				SeedData(t, SeedConfig{Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 1}, Provinces: true, Districts: true, Wards: true, Addresses:&AddressSeed{seedAddress: true, numberOfRecords: 2}})
 			},
 			wantStatus: http.StatusOK,
 			wantMsg:    "Successfully updated the address",
@@ -715,64 +705,3 @@ func TestAddressQuickChange(t *testing.T) {
 
 }
 
-func seedData(t *testing.T, accountSeed *AccountSeed, withWard bool, withDistrict bool, withProvince bool, addressSeed *AddressSeed) {
-	//Reset tables data
-	_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
-	assert.NoError(t, err)
-
-	//Seed data for table account
-	if accountSeed.seedAccount {
-		for i := 0; i < accountSeed.numberOfRecords; i++ {
-			_, err := testdb.Exec(`INSERT INTO account (username,password,"phoneNumber",email,"fullName",gender,avatar,status,role,"emailVerified") 
-			VALUES($1, 'pwd', $2, $3, 'Test User', true, '', true, true, true)`,
-				fmt.Sprintf("user%d", i), fmt.Sprintf("00%d", i), fmt.Sprintf("u%d@gmail.com", i),
-			)
-			assert.NoError(t, err)
-		}
-	}
-	//Seed data for table province
-	if withProvince {
-		_, err = testdb.Exec(`INSERT INTO province ("provinceCode", "provinceName") VALUES (79, 'HCM')`)
-		assert.NoError(t, err)
-	}
-	//Seed data for table district
-	if withDistrict {
-		_, err = testdb.Exec(`INSERT INTO district ("districtCode", "districtName", "provinceID") VALUES (760, 'Q1', 1)`)
-		assert.NoError(t, err)
-	}
-	//Seed data for table ward
-	if withWard {
-		_, err = testdb.Exec(`INSERT INTO ward ("wardCode", "wardName", "districtID") VALUES ('26734', 'BN', 1)`)
-		assert.NoError(t, err)
-	}
-	//Seed data for table address
-	if addressSeed.seedAddress {
-		// Ensure prerequisites are seeded
-		if !(withProvince && withDistrict && withWard && accountSeed.seedAccount) {
-			t.Fatal("Cannot seed address without province, district, ward, and account")
-		}
-		for i := 0; i < addressSeed.numberOfRecords; i++ {
-			_, err := testdb.Exec(`
-			INSERT INTO address 
-			("phoneNumber","fullName",address,"specificAddress",status,"provinceID","districtID","wardID","deleteStatus","accountID","wardCode") 
-			VALUES ($1,$2,$3,$4,true,1,1,1,true,1,'26734')`,
-				"000",
-				fmt.Sprintf("User %d", i+1),
-				fmt.Sprintf("Addr %d", i+1),
-				fmt.Sprintf("Addr detail %d", i+1),
-			)
-			assert.NoError(t, err)
-		}
-	}
-
-}
-
-type AccountSeed struct {
-	seedAccount     bool
-	numberOfRecords int
-}
-
-type AddressSeed struct {
-	seedAddress     bool
-	numberOfRecords int
-}

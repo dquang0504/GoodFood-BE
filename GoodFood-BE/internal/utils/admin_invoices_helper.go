@@ -44,15 +44,20 @@ func ParseDateRange(dateFromStr string, dateToStr string) (time.Time, time.Time,
 	if dateFromStr != "" {
 		dateFrom, err = time.Parse("2006-01-02", dateFromStr)
 		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom (expect yyyy-mm-dd)")
+			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom/dateTo (expect yyyy-mm-dd)")
 		}
 	}
 	if dateToStr != "" {
 		dateTo, err = time.Parse("2006-01-02", dateToStr)
 		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom (expect yyyy-mm-dd)")
+			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom/dateTo (expect yyyy-mm-dd)")
 		}
 	}
+
+	if dateTo.Before(dateFrom){
+		return time.Time{}, time.Time{}, errors.New("Date to can't be before date from")
+	}
+
 	return dateFrom, dateTo, nil
 }
 

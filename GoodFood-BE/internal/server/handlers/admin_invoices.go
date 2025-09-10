@@ -5,7 +5,6 @@ import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-	"math"
 
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
@@ -24,7 +23,7 @@ func GetAdminInvoice(c *fiber.Ctx) error{
 	//Fetch query params
 	page := c.QueryInt("page",0);
 	if page == 0{
-		return service.SendError(c,401,"Did not receive page");
+		return service.SendError(c,400,"Did not receive page");
 	}
 	sort := c.Query("sort","");
 	search := c.Query("search","")
@@ -44,10 +43,11 @@ func GetAdminInvoice(c *fiber.Ctx) error{
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
-	totalPage := int(math.Ceil(float64(totalInvoice) / float64(6)))
+
+	//Calc total pages and offset
+	offset, totalPage := utils.Paginate(page,utils.PageSize,int(totalInvoice))
 
 	//Add pagination
-	offset := (page-1)*6;
 	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset))
 
 	//Fetch invoices with queryMods
