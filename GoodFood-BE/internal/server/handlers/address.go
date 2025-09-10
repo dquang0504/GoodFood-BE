@@ -185,20 +185,25 @@ func AddressDelete(c *fiber.Ctx) error {
 
 	//Look for the to be deleted address and delete it
 	toBeDeleted, err := models.Addresses(
-		qm.Where("\"accountID\" = ? AND \"addressID\" = ?", accountID, addressID),
+		qm.Where("\"addressID\" = ?", addressID),
 	).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c, 404, "Cannot find the specified address")
+		return service.SendError(c, 404, "Address not found")
 	}
+
+	if toBeDeleted.AccountID != accountID{
+		return service.SendError(c, 403, "Address belongs to another account!")
+	}
+
 	_, err = toBeDeleted.Delete(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c, 500, "Cannot delete the address")
+		return service.SendError(c, 500, err.Error())
 	}
 
 	resp := fiber.Map{
 		"status":  "Success",
 		"data":    toBeDeleted,
-		"message": "Successfully updated the address",
+		"message": "Successfully deleted the address",
 	}
 
 	return c.JSON(resp)
@@ -232,28 +237,38 @@ func AddressQuickChange(c *fiber.Ctx) error {
 		return service.SendError(c, 400, "Did not receive accountID")
 	}
 	addressID := c.QueryInt("addressID", 0)
-	if accountID == 0 {
+	if addressID == 0 {
 		return service.SendError(c, 400, "Did not receive addressID")
 	}
 	toBeDisabled := c.QueryInt("toBeDisabled", 0) //addressID to be replaced
 	if toBeDisabled == 0 {
-		return service.SendError(c, 400, "Did not receive toBeDisabled")
+		return service.SendError(c, 400, "Did not receive toBeDisabled address")
+	}
+
+	//Edge case: current addressID and toBeDisabled cannot be the same
+	if addressID == toBeDisabled{
+		return service.SendError(c, 400, "addressID and toBeDisabled cannot be the same");
 	}
 
 	//Fetch new default address
 	toBeUpdated, err := models.Addresses(
-		qm.Where("\"accountID\" = ? AND \"addressID\" = ?", accountID, addressID),
+		qm.Where("\"addressID\" = ?", addressID),
 	).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c, 500, "Cannot find the specified address")
+		return service.SendError(c, 404, "Cannot find the specified to-be-updated address")
 	}
 
 	//Fetch to be replaced default address
 	disableThis, err := models.Addresses(
-		qm.Where("\"accountID\" = ? AND \"addressID\" = ?", accountID, toBeDisabled),
+		qm.Where("\"addressID\" = ?", toBeDisabled),
 	).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c, 500, "Cannot find the specified address")
+		return service.SendError(c, 404, "Cannot find the specified to-be-disabled address")
+	}
+
+	//Check for unauthorized access
+	if toBeUpdated.AccountID != accountID || disableThis.AccountID != accountID{
+		return service.SendError(c, 403, "Address belongs to another account!")
 	}
 
 	//Update details
