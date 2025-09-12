@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUnitAddress_Paginate(t *testing.T) {
+func TestUnitAdminInvoice_Paginate(t *testing.T) {
 	tests := []struct {
 		name        string
 		total       int
@@ -81,4 +81,14 @@ func TestUnitAddress_Paginate(t *testing.T) {
 			assert.Equal(t, tt.wantTotalPg, totalPage)
 		})
 	}
+}
+
+func TestBuildCancelEmailBody(t *testing.T) {
+	html := utils.BuildCancelEmailBody("Out of stock", false)
+	assert.Contains(t, html, "Out of stock")
+	assert.Contains(t, html, "Cash on Delivery (COD)")
+
+	htmlPaid := utils.BuildCancelEmailBody("Payment issue", true)
+	assert.Contains(t, htmlPaid, "Payment issue")
+	assert.Contains(t, htmlPaid, "refund")
 }

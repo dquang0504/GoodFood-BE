@@ -86,7 +86,7 @@ func TestFetchAddress(t *testing.T) {
 			}
 
 			//Reset tables data
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 
 		})
@@ -241,7 +241,7 @@ func TestAddressInsert(t *testing.T) {
 			}
 
 			//Reset tables data
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 		})
 	}
@@ -321,7 +321,7 @@ func TestAddressDetail(t *testing.T) {
 				assert.Contains(t, body, "data")
 			}
 
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 		})
 	}
@@ -443,7 +443,7 @@ func TestAddressUpdate(t *testing.T) {
 				t.Log(body["data"])
 			}
 
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 		})
 	}
@@ -526,7 +526,7 @@ func TestAddressDelete(t *testing.T) {
 				t.Log(body["data"])
 			}
 
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 		})
 	}
@@ -591,7 +591,7 @@ func TestAddressFill(t *testing.T) {
 				t.Log(body["data"])
 			}
 
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 		})
 	}
@@ -698,7 +698,7 @@ func TestAddressQuickChange(t *testing.T) {
 				t.Log(body["data"])
 			}
 
-			_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+			_, err := testdb.Exec(`TRUNCATE TABLE invoice, invoice_detail, address, ward, district, province, account RESTART IDENTITY CASCADE`)
 			assert.NoError(t, err)
 		})
 	}

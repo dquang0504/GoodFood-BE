@@ -110,7 +110,7 @@ func MapInvoices(invoices []*models.Invoice) []dto.InvoiceResponse {
 func FetchInvoiceAndStatus(c *fiber.Ctx, invoiceID int) (*models.Invoice, *models.InvoiceStatus, error) {
 	invoice, err := models.Invoices(qm.Where("\"invoiceID\" = ?", invoiceID)).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.New("Invoice not found!");
 	}
 	status, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?", invoice.InvoiceStatusID)).One(c.Context(), boil.GetContextDB())
 	if err != nil {
@@ -169,7 +169,7 @@ func UpdateInvoiceStatus(c *fiber.Ctx, invoiceID int, status dto.UpdateInvoiceSt
 	//Find status record
 	invoiceStatus, err := models.InvoiceStatuses(qm.Where("\"statusName\" LIKE ?", status.StatusName)).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Invoice status not found!")
 	}
 
 	//Find invoice
@@ -178,7 +178,7 @@ func UpdateInvoiceStatus(c *fiber.Ctx, invoiceID int, status dto.UpdateInvoiceSt
 		qm.Load(models.InvoiceRels.AccountIDAccount),
 	).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Invoice not found!")
 	}
 
 	//Apply business logicc
@@ -218,13 +218,22 @@ func SendOrderCancelEmail(toEmail string, reason string, isPaid bool) error {
 	mailer.SetHeader("To", toEmail)
 	mailer.SetHeader("Subject", "❌ Order Cancellation Notice from GoodFood24h")
 
-	// Common intro
+	//Build mail content
+	body := BuildCancelEmailBody(reason,isPaid)
+	mailer.SetBody("text/html",body)
+
+	//Gmail SMTP
+	dialer := gomail.NewDialer("smtp.gmail.com", 587, "williamdang0404@gmail.com", "yhjd uzhk hhvp zfiq")
+
+	return dialer.DialAndSend(mailer)
+}
+
+// BuildCancelEmailBody tạo nội dung email cancellation
+func BuildCancelEmailBody(reason string, isPaid bool) string {
 	intro := `
 		<p>Hello,</p>
 		<p>We regret to inform you that your order has been cancelled by <strong>GoodFood24h</strong>.</p>
 	`
-
-	// Common reason section
 	reasonSection := fmt.Sprintf(`
 		<p><strong>Reason for cancellation:</strong></p>
 		<p style="background: #f9f9f9; padding: 10px; border-left: 4px solid #F44336; white-space: pre-line;">
@@ -232,7 +241,6 @@ func SendOrderCancelEmail(toEmail string, reason string, isPaid bool) error {
 		</p>
 	`, reason)
 
-	// Message based on payment status
 	var extra string
 	if isPaid {
 		extra = `
@@ -246,8 +254,7 @@ func SendOrderCancelEmail(toEmail string, reason string, isPaid bool) error {
 		`
 	}
 
-	// Final email body
-	emailBody := fmt.Sprintf(`
+	return fmt.Sprintf(`
 		<div style="font-family: Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px;">
 			<h2 style="color: #F44336;">❌ Your order has been cancelled</h2>
 			%s
@@ -258,11 +265,4 @@ func SendOrderCancelEmail(toEmail string, reason string, isPaid bool) error {
 			<p style="font-size: 13px; color: #888;">This email was sent automatically from the GoodFood24h system.</p>
 		</div>
 	`, intro, reasonSection, extra)
-
-	mailer.SetBody("text/html", emailBody)
-
-	dialer := gomail.NewDialer("smtp.gmail.com", 587, "williamdang0404@gmail.com", "yhjd uzhk hhvp zfiq")
-
-	err := dialer.DialAndSend(mailer)
-	return err
 }

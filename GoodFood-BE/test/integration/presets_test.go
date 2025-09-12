@@ -15,9 +15,20 @@ var(
 		Addresses: &AddressSeed{seedAddress: true, numberOfRecords: 1},
 	}
 
-	// Seed account + 5 invoices
-	SeedAccountWithInvoices = SeedConfig{
+	// Seed account + 12 invoices
+	SeedAccountWithInvoicesNoDetail = SeedConfig{
 		Accounts: &AccountSeed{seedAccount: true, numberOfRecords: 1},
-		Invoices: &InvoiceSeed{seedInvoice: true, numberOfRecords: 5},
+		InvoiceStatuses: true,
+		Invoices: &InvoiceSeed{seedInvoice: true, numberOfRecords: 12},
+	}
+
+	//Seed invoice no detail
+	SeedHappyPathInvoice = SeedConfig{
+		Accounts: &AccountSeed{seedAccount: true,numberOfRecords: 1},
+		ProductTypes: &ProductTypeSeed{seedProductType: true,numberOfRecords: 6},
+		Products: &ProductSeed{seedProduct: true,numberOfRecords: 6},
+		InvoiceStatuses: true,
+		Invoices: &InvoiceSeed{seedInvoice: true,numberOfRecords: 6},
+		InvoiceDetails: &InvoiceDetailSeed{seedInvoiceDetail: true,numberOfRecords: 6},
 	}
 )

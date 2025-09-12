@@ -111,7 +111,7 @@ func SetupApp() *fiber.App {
 
 func SeedData(t *testing.T, cfg SeedConfig) {
 	//Reset tables data
-	_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account RESTART IDENTITY CASCADE`)
+	_, err := testdb.Exec(`TRUNCATE TABLE address, ward, district, province, account, invoice, invoice_detail, account, product, product_type RESTART IDENTITY CASCADE`)
 	assert.NoError(t, err)
 
 	//Seed data for table account
@@ -158,10 +158,10 @@ func SeedData(t *testing.T, cfg SeedConfig) {
 			assert.NoError(t, err)
 		}
 	}
-	//Seed data for table invoice
-	if cfg.Invoices != nil && cfg.Invoices.seedInvoice {
-        //seed invoice status
-        statuses := []string{"Order Placed","Order Confirmed", "Order Processing", "Shipping", "Delivered", "Cancelled"}
+
+	//Seed data for table invoice status
+	if cfg.InvoiceStatuses{
+		statuses := []string{"Order Placed","Order Confirmed", "Order Processing", "Shipping", "Delivered", "Cancelled"}
         for _, status := range statuses{
             _, err := testdb.Exec(`
                 INSERT INTO invoice_status
@@ -169,13 +169,51 @@ func SeedData(t *testing.T, cfg SeedConfig) {
             VALUES($1)`,status)
             assert.NoError(t, err)
         }
+	}
 
+	//Seed data for table invoice
+	if cfg.Invoices != nil && cfg.Invoices.seedInvoice {
 		for i := 0; i < cfg.Invoices.numberOfRecords; i++ {
 			_, err := testdb.Exec(`
                 INSERT INTO invoice
                 ("shippingFee","totalPrice","createdAt","paymentMethod",status,note,"cancelReason","receiveAddress","receiveName","receivePhone","accountID","invoiceStatusID")
             VALUES(12000,150000,$1,true,true,'','','Addr detail','Usertest','0799607411',1,1)`,fmt.Sprintf("2025-09-0%02d",i+1))
             assert.NoError(t, err)
+		}
+	}
+
+	//Seed data for table product type
+	if cfg.ProductTypes != nil && cfg.ProductTypes.seedProductType{
+		for i := 0; i < cfg.ProductTypes.numberOfRecords; i++ {
+			_, err := testdb.Exec(`
+                INSERT INTO product_type
+                ("typeName",status)
+            VALUES($1,true)`,fmt.Sprintf("Type %d",i+1))
+            assert.NoError(t, err)
+		}
+	}
+
+	//Seed data for table product
+	if cfg.Products != nil && cfg.Products.seedProduct{
+		for i := 0; i < cfg.Products.numberOfRecords; i++ {
+			_, err := testdb.Exec(`
+                INSERT INTO product
+                ("productName",price,"coverImage",description,status,"insertDate","productTypeID",weight)
+            VALUES($1,75000,'test.png','Delicious food',true,'2025-09-12',1,1200)`,fmt.Sprintf("Product %d",i+1))
+            assert.NoError(t, err)
+		}
+	}
+
+	//Seed data for table invoice detail
+	if cfg.InvoiceDetails != nil && cfg.InvoiceDetails.seedInvoiceDetail{
+		if cfg.Invoices != nil{
+			for i := 0; i < cfg.InvoiceDetails.numberOfRecords; i++ {
+				_, err := testdb.Exec(`
+					INSERT INTO invoice_detail
+					(quantity,price,"productID","invoiceID")
+				VALUES(3,25000,$1,$2)`,i+1,i+1)
+				assert.NoError(t, err)
+			}
 		}
 	}
 
@@ -196,11 +234,30 @@ type InvoiceSeed struct {
 	numberOfRecords int
 }
 
+type ProductSeed struct{
+	seedProduct bool
+	numberOfRecords int
+}
+
+type ProductTypeSeed struct{
+	seedProductType bool
+	numberOfRecords int
+}
+
+type InvoiceDetailSeed struct{
+	seedInvoiceDetail bool
+	numberOfRecords int
+}
+
 type SeedConfig struct {
 	Accounts  *AccountSeed
 	Addresses *AddressSeed
 	Invoices  *InvoiceSeed
+	InvoiceDetails  *InvoiceDetailSeed
+	Products *ProductSeed
+	ProductTypes *ProductTypeSeed
 	Provinces bool
 	Districts bool
 	Wards     bool
+	InvoiceStatuses bool
 }
