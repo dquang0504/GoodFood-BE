@@ -5,7 +5,6 @@ import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"

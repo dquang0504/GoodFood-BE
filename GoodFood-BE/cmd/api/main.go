@@ -16,6 +16,17 @@ import (
 	"github.com/aarondl/sqlboiler/v4/boil"
 )
 
+func init(){
+	ch := make(chan int)
+
+    go func() {
+        ch <- 1
+        ch <- 2 // kẹt ở đây vì không ai nhận
+    }()
+
+    fmt.Println(<-ch) // nhận 1
+}
+
 func gracefulShutdown(fiberServer *server.FiberServer, dbService database.Service, done chan bool) {
 	// Create context that listens for the interrupt signal from the OS.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

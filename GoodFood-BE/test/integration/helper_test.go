@@ -9,103 +9,102 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func SetupApp() *fiber.App {
 	app := fiber.New()
 
-	 // User
-    app.Post("/user/register", handlers.HandleRegister)
-    app.Get("/user/login", handlers.HandleLogin)
-    app.Post("/user/login/google", handlers.HandleLoginGoogle)
-    app.Post("/user/login/facebook", handlers.HandleLoginFacebook)
-    app.Post("/user/refresh-token", handlers.RefreshToken)
-    app.Put("/user/update", handlers.HandleUpdateAccount)
-    app.Post("/user/forgot-password/sendOTP", handlers.HandleForgotPassword)
-    app.Get("/user/forgot-password/validate", handlers.ValidateResetToken)
-    app.Post("/user/forgot-password/reset", handlers.HandleResetPassword)
-    app.Post("/user/contact", handlers.HandleContact)
+	// User
+	app.Post("/user/register", handlers.HandleRegister)
+	app.Get("/user/login", handlers.HandleLogin)
+	app.Post("/user/login/google", handlers.HandleLoginGoogle)
+	app.Post("/user/login/facebook", handlers.HandleLoginFacebook)
+	app.Post("/user/refresh-token", handlers.RefreshToken)
+	app.Put("/user/update", handlers.HandleUpdateAccount)
+	app.Post("/user/forgot-password/sendOTP", handlers.HandleForgotPassword)
+	app.Get("/user/forgot-password/validate", handlers.ValidateResetToken)
+	app.Post("/user/forgot-password/reset", handlers.HandleResetPassword)
+	app.Post("/user/contact", handlers.HandleContact)
 
-    // Products
-    app.Get("/products/getFeaturings", handlers.GetFour)
-    app.Get("/products/getTypes", handlers.GetTypes)
-    app.Get("/products", handlers.GetProductsByPage)
-    app.Post("/products/classify-image", handlers.ClassifyImage)
-    app.Get("/products/detail", handlers.GetDetail)
-    app.Get("/products/similar", handlers.GetSimilar)
+	// Products
+	app.Get("/products/getFeaturings", handlers.GetFour)
+	app.Get("/products/getTypes", handlers.GetTypes)
+	app.Get("/products", handlers.GetProductsByPage)
+	app.Post("/products/classify-image", handlers.ClassifyImage)
+	app.Get("/products/detail", handlers.GetDetail)
+	app.Get("/products/similar", handlers.GetSimilar)
 
-    // Cart
-    app.Get("/cart/fetch", handlers.FetchCart)
-    app.Get("/cart", handlers.GetCartDetail)
-    app.Post("/cart/modify", handlers.Cart_ModifyQuantity)
-    app.Delete("/cart/delete", handlers.DeleteCartItem)
-    app.Post("/cart/add", handlers.AddToCart)
-    app.Delete("/cart/deleteAll", handlers.DeleteAllItems)
+	// Cart
+	app.Get("/cart/fetch", handlers.FetchCart)
+	app.Get("/cart", handlers.GetCartDetail)
+	app.Post("/cart/modify", handlers.Cart_ModifyQuantity)
+	app.Delete("/cart/delete", handlers.DeleteCartItem)
+	app.Post("/cart/add", handlers.AddToCart)
+	app.Delete("/cart/deleteAll", handlers.DeleteAllItems)
 
-    // Address
-    app.Get("/address/fetch", handlers.FetchAddress)
-    app.Post("/address/insert", handlers.AddressInsert)
-    app.Get("/address/detail", handlers.AddressDetail)
-    app.Put("/address/update", handlers.AddressUpdate)
-    app.Delete("/address/delete", handlers.AddressDelete)
-    app.Get("/address/fill", handlers.AddressFill)
-    app.Put("/address/quickChange", handlers.AddressQuickChange)
+	// Address
+	app.Get("/address/fetch", handlers.FetchAddress)
+	app.Post("/address/insert", handlers.AddressInsert)
+	app.Get("/address/detail", handlers.AddressDetail)
+	app.Put("/address/update", handlers.AddressUpdate)
+	app.Delete("/address/delete", handlers.AddressDelete)
+	app.Get("/address/fill", handlers.AddressFill)
+	app.Put("/address/quickChange", handlers.AddressQuickChange)
 
-    // Invoice
-    app.Post("/invoice/pay", handlers.InvoicePay)
-    app.Post("/invoice/pay/vnpay", handlers.InvoicePayVNPAY)
+	// Invoice
+	app.Post("/invoice/pay", handlers.InvoicePay)
+	app.Post("/invoice/pay/vnpay", handlers.InvoicePayVNPAY)
 
-    // Order history
-    app.Get("/order-history", handlers.GetOrderHistory)
-    app.Put("/order-history/update", handlers.CancelOrder)
-    app.Get("/order-history/details", handlers.GetOrderHistoryDetail)
+	// Order history
+	app.Get("/order-history", handlers.GetOrderHistory)
+	app.Put("/order-history/update", handlers.CancelOrder)
+	app.Get("/order-history/details", handlers.GetOrderHistoryDetail)
 
-    // Review
-    app.Get("/review", handlers.GetReviewData)
-    app.Post("/review/create", handlers.HandleSubmitReview)
-    app.Get("/review/detail", handlers.GetReviewDetail)
-    app.Put("/review/update", handlers.HandleUpdateReview)
+	// Review
+	app.Get("/review", handlers.GetReviewData)
+	app.Post("/review/create", handlers.HandleSubmitReview)
+	app.Get("/review/detail", handlers.GetReviewDetail)
+	app.Put("/review/update", handlers.HandleUpdateReview)
 
-    // Change password
-    app.Post("/change-password/submit", handlers.ChangePasswordSubmit)
+	// Change password
+	app.Post("/change-password/submit", handlers.ChangePasswordSubmit)
 
-    // Admin dashboard
-    app.Get("/admin/dashboard", handlers.GetDashboard)
-    app.Get("/admin/linechart", handlers.GetLineChart)
-    app.Get("/admin/piechart", handlers.GetPieChart)
-    app.Get("/admin/barchart", handlers.GetBarChart)
+	// Admin dashboard
+	app.Get("/admin/dashboard", handlers.GetDashboard)
+	app.Get("/admin/linechart", handlers.GetLineChart)
+	app.Get("/admin/piechart", handlers.GetPieChart)
+	app.Get("/admin/barchart", handlers.GetBarChart)
 
-    // Admin order
-    app.Get("/admin/order", handlers.GetAdminInvoice)
-    app.Get("/admin/order/detail", handlers.GetAdminInvoiceDetail)
-    app.Put("/admin/order/update", handlers.UpdateInvoice)
+	// Admin order
+	app.Get("/admin/order", handlers.GetAdminInvoice)
+	app.Get("/admin/order/detail", handlers.GetAdminInvoiceDetail)
+	app.Put("/admin/order/update", handlers.UpdateInvoice)
 
-    // Admin user
-    app.Get("/admin/user", handlers.GetAdminUsers)
-    app.Get("/admin/user/detail", handlers.GetAdminUserDetail)
-    app.Post("/admin/user/create", handlers.AdminUserCreate)
-    app.Put("/admin/user/update", handlers.AdminUserUpdate)
+	// Admin user
+	app.Get("/admin/user", handlers.GetAdminUsers)
+	app.Get("/admin/user/detail", handlers.GetAdminUserDetail)
+	app.Post("/admin/user/create", handlers.AdminUserCreate)
+	app.Put("/admin/user/update", handlers.AdminUserUpdate)
 
-    // Admin product type
-    app.Get("/admin/product-type", handlers.GetAdminProductTypes)
-    app.Get("/admin/product-type/detail", handlers.GetAdminProductTypeDetail)
-    app.Post("/admin/product-type/create", handlers.AdminProductTypeCreate)
-    app.Put("/admin/product-type/update", handlers.AdminProductTypeUpdate)
+	// Admin product type
+	app.Get("/admin/product-type", handlers.GetAdminProductTypes)
+	app.Get("/admin/product-type/detail", handlers.GetAdminProductTypeDetail)
+	app.Post("/admin/product-type/create", handlers.AdminProductTypeCreate)
+	app.Put("/admin/product-type/update", handlers.AdminProductTypeUpdate)
 
-    // Admin product
-    app.Get("/admin/product", handlers.GetAdminProducts)
-    app.Get("/admin/product/detail", handlers.GetAdminProductDetail)
-    app.Post("/admin/product/create", handlers.AdminProductCreate)
-    app.Put("/admin/product/update", handlers.AdminProductUpdate)
+	// Admin product
+	app.Get("/admin/product", handlers.GetAdminProducts)
+	app.Get("/admin/product/detail", handlers.GetAdminProductDetail)
+	app.Post("/admin/product/create", handlers.AdminProductCreate)
+	app.Put("/admin/product/update", handlers.AdminProductUpdate)
 
-    // Admin statistics
-    app.Get("/admin/statistic", handlers.GetAdminStatistics)
+	// Admin statistics
+	app.Get("/admin/statistic", handlers.GetAdminStatistics)
 
-    // Admin review
-    app.Get("/admin/review", handlers.GetAdminReview)
-    app.Get("/admin/review/review-analysis", handlers.GetAdminReviewAnalysis)
-    app.Get("/admin/review/detail", handlers.GetAdminReviewDetail)
-    app.Post("/admin/review/reply", handlers.InsertReviewReply)
-    app.Put("/admin/review/update", handlers.UpdateReviewReply)
+	// Admin review
+	app.Get("/admin/review", handlers.GetAdminReview)
+	app.Get("/admin/review/review-analysis", handlers.GetAdminReviewAnalysis)
+	app.Get("/admin/review/detail", handlers.GetAdminReviewDetail)
+	app.Post("/admin/review/reply", handlers.InsertReviewReply)
+	app.Put("/admin/review/update", handlers.UpdateReviewReply)
 
 	return app
 }
@@ -126,7 +125,7 @@ func SeedData(t *testing.T, cfg SeedConfig) {
 		}
 	}
 	//Seed data for table province
-	if cfg.Provinces{
+	if cfg.Provinces {
 		_, err = testdb.Exec(`INSERT INTO province ("provinceCode", "provinceName") VALUES (79, 'HCM')`)
 		assert.NoError(t, err)
 	}
@@ -141,7 +140,7 @@ func SeedData(t *testing.T, cfg SeedConfig) {
 		assert.NoError(t, err)
 	}
 	//Seed data for table address
-	if cfg.Addresses.seedAddress {
+	if cfg.Addresses != nil && cfg.Addresses.seedAddress {
 		// Ensure prerequisites are seeded
 		if !(cfg.Provinces && cfg.Districts && cfg.Wards && cfg.Accounts.seedAccount) {
 			t.Fatal("Cannot seed address without province, district, ward, and account")
@@ -160,8 +159,24 @@ func SeedData(t *testing.T, cfg SeedConfig) {
 		}
 	}
 	//Seed data for table invoice
-	if cfg.Invoices.seedInvoice{
-		
+	if cfg.Invoices != nil && cfg.Invoices.seedInvoice {
+        //seed invoice status
+        statuses := []string{"Order Placed","Order Confirmed", "Order Processing", "Shipping", "Delivered", "Cancelled"}
+        for _, status := range statuses{
+            _, err := testdb.Exec(`
+                INSERT INTO invoice_status
+                ("statusName")
+            VALUES($1)`,status)
+            assert.NoError(t, err)
+        }
+
+		for i := 0; i < cfg.Invoices.numberOfRecords; i++ {
+			_, err := testdb.Exec(`
+                INSERT INTO invoice
+                ("shippingFee","totalPrice","createdAt","paymentMethod",status,note,"cancelReason","receiveAddress","receiveName","receivePhone","accountID","invoiceStatusID")
+            VALUES(12000,150000,$1,true,true,'','','Addr detail','Usertest','0799607411',1,1)`,fmt.Sprintf("2025-09-0%02d",i+1))
+            assert.NoError(t, err)
+		}
 	}
 
 }
@@ -176,9 +191,9 @@ type AddressSeed struct {
 	numberOfRecords int
 }
 
-type InvoiceSeed struct{
-	seedInvoice		bool
-	numberOfRecords	int
+type InvoiceSeed struct {
+	seedInvoice     bool
+	numberOfRecords int
 }
 
 type SeedConfig struct {
