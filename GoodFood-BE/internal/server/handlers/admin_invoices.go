@@ -14,7 +14,10 @@ import (
 //Has a filter processing logic and returns the final list of data with pagination.
 func GetAdminInvoice(c *fiber.Ctx) error{
 	//Fetch metrics for InvoiceCards
-	cards, err := utils.FetchInvoiceCards(c);
+	query := `SELECT COALESCE(COUNT("invoiceID"),0) AS total,
+		COUNT(CASE WHEN "invoiceStatusID" = 6 THEN 1 END) AS canceled
+		FROM invoice`
+	cards, err := utils.FetchCards(c,query,&dto.InvoiceCards{});
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}

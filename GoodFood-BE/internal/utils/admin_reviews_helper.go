@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/aarondl/sqlboiler/v4/boil"
-	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
@@ -60,17 +59,6 @@ func convertIntSliceToInterface(s []int) []interface{}{
 		result[i] = v
 	}
 	return result
-}
-
-// fetchReviewCards gets overall review stats
-func FetchReviewCards(c *fiber.Ctx) (dto.ReviewCards, error) {
-	var cards dto.ReviewCards
-	err := queries.Raw(`
-		SELECT COALESCE(COUNT(*),0) AS total_review,
-			   COUNT(CASE WHEN stars = 5 THEN 1 END) AS total_5s
-		FROM review
-	`).Bind(c.Context(), boil.GetContextDB(), &cards)
-	return cards, err
 }
 
 // analyzeReviews sends comments to Python service for sentiment analysis

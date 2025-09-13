@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/auth"
+	"GoodFood-BE/internal/dto"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
@@ -193,7 +194,7 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod 
 	var (
 		wg     sync.WaitGroup
 		mu     sync.Mutex
-		carts  []CartDetailResponse
+		carts  []dto.CartDetailResponse
 	)
 
 	//Validate authentication
@@ -255,7 +256,7 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod 
 
 			//Append items to cart safely
 			mu.Lock()
-			carts = append(carts, CartDetailResponse{
+			carts = append(carts, dto.CartDetailResponse{
 				CartDetail: models.CartDetail{
 					Quantity:  quantity,
 					ProductID: product.ProductID,

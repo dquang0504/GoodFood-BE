@@ -125,6 +125,13 @@ func ClearProductCache(productID int) error{
 	return nil
 }
 
+func ClearCartCache(accountID int){
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	if err := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err(); err != nil{
+		fmt.Println("Failed to clear cache: ",err)
+	}
+}
+
 func InitializeFirebaseApp(ctx context.Context) *firebase.App {
     raw := os.Getenv("FIREBASE_SERVICE_ACCOUNT")
     if raw == "" {

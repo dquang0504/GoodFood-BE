@@ -42,7 +42,11 @@ func GetAdminReview(c *fiber.Ctx) error{
 	}
 
 	// Fetch cards
-	cards, err := utils.FetchReviewCards(c)
+	query := `SELECT COALESCE(COUNT(*),0) AS total_review,
+			   COUNT(CASE WHEN stars = 5 THEN 1 END) AS total_5s
+		FROM review
+	`
+	cards, err := utils.FetchCards(c,query,&dto.ReviewCards{})
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}

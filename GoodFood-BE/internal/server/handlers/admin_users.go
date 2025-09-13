@@ -1,50 +1,41 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"context"
 	"fmt"
-	"math"
 
-	"github.com/aarondl/sqlboiler/v4/queries"
+	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"
-	"github.com/aarondl/sqlboiler/v4/boil"
 )
 
-type UserCards struct {
-	TotalUsers    int `boil:"totalusers"`
-	TotalDisabled int `boil:"totaldisabled"`
-}
+// GetAdminUsers returns paginated users with filter and summary cards.
 func GetAdminUsers(c *fiber.Ctx) error{
-
-	var cards UserCards
-
-	err := queries.Raw(`
+	//Fetch user cards
+	query := `
 		SELECT COALESCE(COUNT("accountID"),0) AS totalusers,
 		COUNT(CASE WHEN status = false THEN 1 END) AS totaldisabled
 		FROM account
-	`).Bind(c.Context(),boil.GetContextDB(),&cards)
+	`
+	cards, err := utils.FetchCards(c,query,&dto.UserCards{});
 	if err != nil{
-		return service.SendError(c,500,err.Error());
+		return service.SendError(c,500,err.Error())
 	}
 
-	//fetching page number
+	//Fetch query params
 	page := c.QueryInt("page",0);
 	if page == 0{
 		return service.SendError(c,401,"Did not receive page");
 	}
-	//fetching sort and search
 	sort := c.Query("sort","");
 	search := c.Query("search","");
-	//calculating offset
-	offset := (page-1)*6;
-	
-	//creating query mod
-	queryMods := []qm.QueryMod{}
 
-	// handling search and sort filter and filling queryMods
+	// Handle search and sort filter and filling queryMods
+	queryMods := []qm.QueryMod{}
 	if search != ""{
 		fmt.Println(sort)
 		switch sort{
@@ -61,15 +52,15 @@ func GetAdminUsers(c *fiber.Ctx) error{
 		}
 	}
 
-	//counting total users matching filter
+	//Count total users with queryMods
 	totalUser, err := models.Accounts(queryMods...).Count(c.Context(),boil.GetContextDB())
 	if err != nil{
 		return service.SendError(c,500,err.Error())
 	}
-	//calculating total pages
-	totalPage := int(math.Ceil(float64(totalUser)/float64(6)))
+	//Calculate total pages and offset
+	offset, totalPage := utils.Paginate(page,utils.PageSize,int(totalUser))
 
-	queryMods = append(queryMods, qm.OrderBy("\"accountID\" DESC"), qm.Limit(6), qm.Offset(offset))
+	queryMods = append(queryMods, qm.OrderBy("\"accountID\" DESC"), qm.Limit(utils.PageSize), qm.Offset(offset))
 
 	
 	users, err := models.Accounts(queryMods...).All(c.Context(),boil.GetContextDB());
@@ -88,6 +79,7 @@ func GetAdminUsers(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
+// GetAdminUserDetail returns detail of a single user by accountID.
 func GetAdminUserDetail(c *fiber.Ctx) error{
 	accountID := c.QueryInt("accountID",0);
 	if accountID == 0{
@@ -108,30 +100,26 @@ func GetAdminUserDetail(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
-type UserError struct{
-	ErrName string `json:"errName"`
-	ErrUsername string `json:"errUsername"`
-	ErrPhone string `json:"errPhone"`
-	ErrEmail string `json:"errEmail"`
-	ErrPassword string `json:"errPassword"`
-}
-
+// AdminUserCreate creates a new user after validating input.
 func AdminUserCreate(c *fiber.Ctx) error{
-	hasPassword := false;
-	hasUsername := true;
-	hasEmail := false;
-	hasPhone := false;
+	var(
+		hasPassword = false
+		hasUsername = true
+		hasEmail = false
+		hasPhone = false
+	)
 	var user models.Account
 	if err := c.BodyParser(&user); err != nil{
 		return service.SendError(c,400,"Invalid body!");
 	}
 
+	//Fields validation
 	if valid, errObj := validationUser(&user,hasPassword,hasUsername,hasEmail,hasPhone); !valid{
 		return service.SendErrorStruct(c,400,errObj);
 	}
 
-	err := user.Insert(c.Context(),boil.GetContextDB(),boil.Infer());
-	if err != nil{
+	//Insert
+	if err := user.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
@@ -144,7 +132,9 @@ func AdminUserCreate(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
+// AdminUserUpdate updates selected fields of a user.
 func AdminUserUpdate(c *fiber.Ctx) error{
+	//Fetch query param
 	accountID := c.QueryInt("accountID",0);
 	if accountID == 0{
 		return service.SendError(c,400,"Did not receive accountID");
@@ -159,13 +149,12 @@ func AdminUserUpdate(c *fiber.Ctx) error{
 		return service.SendError(c,500, err.Error());
 	}
 
-	//update
+	// Only update specific fields
 	user.FullName = userBody.FullName
 	user.Role = userBody.Role
 	user.Gender = userBody.Gender
 	user.Status = userBody.Status
-	_,err = user.Update(c.Context(),boil.GetContextDB(),boil.Infer());
-	if err != nil{
+	if _,err = user.Update(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
@@ -179,8 +168,9 @@ func AdminUserUpdate(c *fiber.Ctx) error{
 
 }
 
-func validationUser(user *models.Account, hasPassword bool,hasUsername bool, hasEmail bool,hasPhone bool) (bool,UserError){
-	var error UserError
+// validateUser checks input fields depending on required flags.
+func validationUser(user *models.Account, hasPassword bool,hasUsername bool, hasEmail bool,hasPhone bool) (bool,dto.UserError){
+	var error dto.UserError
 	isValid := true
 	if user.FullName == ""{
 		error.ErrName = "Please input your full name!"

@@ -25,16 +25,11 @@ const (
 	StatusDelivered      = "Delivered"
 )
 
-// FetchInvoiceCards gets summary stats (total, canceled).
-func FetchInvoiceCards(c *fiber.Ctx) (dto.InvoiceCards, error) {
-	cards := dto.InvoiceCards{}
-	err := queries.Raw(`
-		SELECT COALESCE(COUNT("invoiceID"),0) AS total,
-		COUNT(CASE WHEN "invoiceStatusID" = 6 THEN 1 END) AS canceled
-		FROM invoice
-	`).Bind(c.Context(), boil.GetContextDB(), &cards)
+// FetchCards gets summary stats for its corresponding module.
+func FetchCards[T any](c *fiber.Ctx, query string, dest *T) (*T, error) {
+	err := queries.Raw(query).Bind(c.Context(), boil.GetContextDB(), dest)
 
-	return cards, err
+	return dest, err
 }
 
 // ParseDateRange validates and parses date strings (returns zero time if empty).

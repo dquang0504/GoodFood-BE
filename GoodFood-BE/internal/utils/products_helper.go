@@ -11,7 +11,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/aarondl/sqlboiler/v4/boil"
-	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 )
 
@@ -28,25 +27,14 @@ const (
 )
 
 // GetAdminProductsUtil fetches paginated product list for admin panel.
-func GetAdminProductsUtil(c *fiber.Ctx, page int, search string, sort string) ([]dto.ProductResponse, dto.ProductCards, []*models.ProductType, int, error) {
+func GetAdminProductsUtil(c *fiber.Ctx, page int, search string, sort string) ([]dto.ProductResponse, []*models.ProductType, int, error) {
 	offset := (page - 1) * PageSize
 	queryMods := []qm.QueryMod{}
-
-	//Fetch product cards (total + inactive)
-	cards := dto.ProductCards{}
-	err := queries.Raw(`
-		SELECT COALESCE(COUNT(*),0) AS totalproduct,
-		COUNT(CASE WHEN status = false THEN 1 END) AS totalinactive
-		FROM product
-	`).Bind(c.Context(), boil.GetContextDB(), &cards)
-	if err != nil {
-		return nil, dto.ProductCards{}, nil, 0, err
-	}
 
 	//Fetch product types
 	listLoaiSP, err := models.ProductTypes().All(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, dto.ProductCards{}, nil, 0, err
+		return nil, nil, 0, err
 	}
 
 	//Build query conditions (search and sort)
@@ -55,7 +43,7 @@ func GetAdminProductsUtil(c *fiber.Ctx, page int, search string, sort string) ([
 		if search != "" {
 			fetchType, err := models.ProductTypes(qm.Where("\"typeName\" ILIKE ?", search)).One(c.Context(), boil.GetContextDB())
 			if err != nil {
-				return nil, dto.ProductCards{}, nil, 0, err
+				return nil, nil, 0, err
 			}
 			queryMods = append(queryMods, qm.Where("\"productTypeID\" = ?", fetchType.ProductTypeID))
 		}
@@ -76,7 +64,7 @@ func GetAdminProductsUtil(c *fiber.Ctx, page int, search string, sort string) ([
 	//Total products and total pages
 	totalProducts, err := models.Products(queryMods...).Count(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, dto.ProductCards{}, nil, 0, err
+		return nil, nil, 0, err
 	}
 	totalPage := int(math.Ceil(float64(totalProducts) / 6))
 
@@ -92,7 +80,7 @@ func GetAdminProductsUtil(c *fiber.Ctx, page int, search string, sort string) ([
 	queryMods = append(queryMods, qm.OrderBy("\"productID\" DESC"), qm.Limit(6), qm.Offset(offset), qm.Load(models.ProductRels.ProductTypeIDProductType))
 	products, err := models.Products(queryMods...).All(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, dto.ProductCards{}, nil, 0, err
+		return nil, nil, 0, err
 	}
 
 	//Map to response
@@ -104,7 +92,7 @@ func GetAdminProductsUtil(c *fiber.Ctx, page int, search string, sort string) ([
 		}
 	}
 
-	return response, cards, listLoaiSP, totalPage, nil
+	return response, listLoaiSP, totalPage, nil
 }
 
 //ClearRedisByPattern deletes Redis keys matching a pattern

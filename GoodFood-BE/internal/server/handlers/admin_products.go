@@ -19,7 +19,12 @@ func GetAdminProducts(c *fiber.Ctx) error{
 	sort := c.Query("sort","");
 	search := c.Query("search","");
 
-	products, cards, listLoaiSP, totalPage, err := utils.GetAdminProductsUtil(c,page,search,sort);
+	query := `SELECT COALESCE(COUNT(*),0) AS totalproduct,
+		COUNT(CASE WHEN status = false THEN 1 END) AS totalinactive
+		FROM product
+	`
+	cards, err := utils.FetchCards(c,query,&dto.ProductCards{})
+	products, listLoaiSP, totalPage, err := utils.GetAdminProductsUtil(c,page,search,sort);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
