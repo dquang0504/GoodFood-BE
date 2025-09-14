@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/dto"
-	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
@@ -17,13 +16,16 @@ import (
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 )
 
+//GetReviewData returns a list of reviews of a specific product.
 func GetReviewData(c *fiber.Ctx) error{
+	//Fetch query params
 	invoiceID := c.QueryInt("invoiceID",0);
 	productID := c.QueryInt("productID",0);
 	if invoiceID == 0 || productID == 0{
 		return service.SendError(c,400,"Did not receive invoiceID or productID");
 	}
 
+	//Build response
 	invoiceDetails, err := models.InvoiceDetails(
 		qm.Where("\"invoiceID\" = ?",invoiceID),
 		qm.Load(models.InvoiceDetailRels.ProductIDProduct),
@@ -35,13 +37,10 @@ func GetReviewData(c *fiber.Ctx) error{
 
 	response := dto.InvoiceDetailStruct{}
 	for _, detail := range invoiceDetails{
-		check := false;
-		review, err := models.Reviews(
+		reviewExist, _ := models.Reviews(
 			qm.Where("\"productID\" = ?",detail.R.ProductIDProduct.ProductID),
-		).One(c.Context(),boil.GetContextDB());
-		if err == nil && review != nil{
-			check = true;	
-		}
+		).Exists(c.Context(),boil.GetContextDB());
+
 		response = dto.InvoiceDetailStruct{
 			InvoiceID: detail.InvoiceID,
 			Image: detail.R.ProductIDProduct.CoverImage,
@@ -49,7 +48,7 @@ func GetReviewData(c *fiber.Ctx) error{
 			Quantity: detail.Quantity,
 			TotalMoney: float64(detail.Price),
 			ShippingFee: float64(detail.R.InvoiceIDInvoice.ShippingFee),
-			ReviewCheck: check,
+			ReviewCheck: reviewExist,
 		}
 		
 	}
@@ -61,50 +60,30 @@ func GetReviewData(c *fiber.Ctx) error{
 	}
 	return c.JSON(resp);
 }
-type ReviewSubmitResponse struct{
-	models.Review
-	ReviewImages []models.ReviewImage `json:"reviewImages"`
-}
-type NSFWScores struct{
-	Unsafe float64 `json:"unsafe"`
-	Porn float64 `json:"porn"`
-	Sexy float64 `json:"sexy"`
-}
-type ImageDetectionResult struct{
-	Image string `json:"image"`
-	NSFW bool `json:"nsfw"`
-	NSFWScores NSFWScores `json:"nsfw_scores"`
-	Violent bool `json:"violent"`
-	ViolentLabel string `json:"violent_label"`
-}
-type ReviewContentDetection struct{
-	Label string `json:"label"`
-	Score float64 `json:"score"`
-	Images []ImageDetectionResult `json:"images"`
-}
+
 func HandleSubmitReview(c *fiber.Ctx) error{
 	//resty
 	client := resty.New();
 
-	// 1. Parse phần "review" từ multipart
+	// 1. Parse "review" from multipart
 	reviewJson := c.FormValue("review")
 	if reviewJson == "" {
 		return service.SendError(c, 400, "Missing review data")
 	}
 
-	var body ReviewSubmitResponse
+	var body dto.ReviewSubmitRequest
 	if err := json.Unmarshal([]byte(reviewJson), &body); err != nil {
 		return service.SendError(c, 400, "Invalid review JSON: "+err.Error())
 	}
 
-	// 2. Lấy tất cả file "images"
+	// 2. Fetch all files from "images"
 	form, err := c.MultipartForm()
 	if err != nil {
 		return service.SendError(c, 400, "Error parsing multipart: "+err.Error())
 	}
 	files := form.File["reviewImages"]
 
-	// 3. Đọc binary các file ảnh để gửi cho gRPC Flask
+	// 3. Read images binary and send to microservice Flask
 	var imageBinaries = make(map[string][]byte)
 	for _, file := range files {
 		f, err := file.Open()
@@ -120,13 +99,13 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 		imageBinaries[file.Filename] = buf
 	}
 
-	// 4. Gửi ảnh binary & comment tới Flask để kiểm duyệt
+	// 4. Send binary images & comment to Flask to moderate
 	payload := map[string]interface{}{
 		"review": body.Comment,
 		"images": imageBinaries,
 	}
 
-	var result ReviewContentDetection
+	var result dto.ReviewContentDetection
 	_, err = client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(payload).
@@ -193,12 +172,15 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
+//GetReviewDetail returns all the details of the specified review
 func GetReviewDetail(c *fiber.Ctx) error{
+	//Fetch query param
 	reviewID := c.QueryInt("reviewID",0);
 	if reviewID == 0{
 		return service.SendError(c,400, "Did not receive reviewID!");
 	}
 
+	//Build response
 	review, err := models.Reviews(
 		qm.Where("\"reviewID\" = ?",reviewID),
 		qm.Load(models.ReviewRels.AccountIDAccount),
@@ -236,34 +218,35 @@ func GetReviewDetail(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
+//HandleUpdateReview updates the specified review
 func HandleUpdateReview(c *fiber.Ctx) error{
 	//resty
 	client := resty.New();
 
-	// 1. Parse phần "review" từ multipart
-	reviewJson := c.FormValue("review")
-	if reviewJson == "" {
-		return service.SendError(c, 400, "Missing review data")
-	}
-
-
+	//Fetch query param
 	reviewID := c.QueryInt("reviewID",0);
 	if reviewID == 0{
 		return service.SendError(c,400,"Did not receive reviewID");
 	}
-	var body ReviewSubmitResponse
+
+	// 1. Parse "review" from multipart
+	reviewJson := c.FormValue("review")
+	if reviewJson == "" {
+		return service.SendError(c, 400, "Missing review data")
+	}
+	var body dto.ReviewSubmitRequest
 	if err := json.Unmarshal([]byte(reviewJson), &body); err != nil {
 		return service.SendError(c, 400, "Invalid review JSON: "+err.Error())
 	}
 
-	// 2. Lấy tất cả file "images"
+	// 2. Fetch all files from "images"
 	form, err := c.MultipartForm()
 	if err != nil {
 		return service.SendError(c, 400, "Error parsing multipart: "+err.Error())
 	}
 	files := form.File["reviewImages"]
 
-	// 3. Đọc binary các file ảnh để gửi cho gRPC Flask
+	// 3. Read images binary to send to Flask microservice
 	var imageBinaries = make(map[string][]byte)
 	for _, file := range files {
 		f, err := file.Open()
@@ -280,13 +263,13 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 		fmt.Println(imageBinaries);
 	}
 
-	// 4. Gửi ảnh binary & comment tới Flask để kiểm duyệt
+	// 4. Send binary images & comment to Flask for moderation
 	payload := map[string]interface{}{
 		"review": body.Comment,
 		"images": imageBinaries,
 	}
 
-	var result ReviewContentDetection
+	var result dto.ReviewContentDetection
 	_, err = client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(payload).
@@ -378,17 +361,7 @@ func HandleUpdateReview(c *fiber.Ctx) error{
 
 	// Clear all Redis keys related to this product's review filters
 	pattern := fmt.Sprintf("product:detail:%d:filter=*:page=*", body.ProductID)
-	iter := redisdatabase.Client.Scan(redisdatabase.Ctx, 0, pattern, 0).Iterator()
-	for iter.Next(redisdatabase.Ctx) {
-		key := iter.Val()
-		err := redisdatabase.Client.Del(redisdatabase.Ctx, key).Err()
-		if err != nil {
-			fmt.Printf("Failed to delete key %s: %v\n", key, err)
-		}
-	}
-	if err := iter.Err(); err != nil {
-		fmt.Printf("Error during Redis scan: %v\n", err)
-	}
+	utils.ClearCache(pattern);
 
 	resp := fiber.Map{
 		"status": "Success",
