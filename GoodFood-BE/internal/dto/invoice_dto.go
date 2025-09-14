@@ -39,3 +39,10 @@ type InvoiceDetailResponse struct{
 	ReceivePhone string `boil:"phone"`
 	ReceiveAddress string `boil:"address"`
 }
+
+//InvoicePayload represents the payload received from front-end at Order payment module
+type InvoicePayload struct{
+	Invoice models.Invoice `json:"invoice"`
+	InvoiceDetails []models.InvoiceDetail `json:"invoiceDetails"`
+	Products []models.Product `json:"product"`
+}

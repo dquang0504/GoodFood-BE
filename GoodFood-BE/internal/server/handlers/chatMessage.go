@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,15 +21,7 @@ var(
 	adminConnMutex sync.RWMutex
 )
 
-type ChatMessage struct{
-	FromID int `json:"from_id"`
-	ToID int `json:"to_id"`
-	Sender string `json:"sender"` //user or admin
-	Message string `json:"message"`
-	Timestamp int64 `json:"timestamp"`
-}
-
-// Handler WebSocket for user
+//HandleUserWebsocket sets up connection for the logged in user and sends message to all admins if asked to.
 func HandleUserWebsocket(c *websocket.Conn){
 	accountID, err := strconv.Atoi(c.Params("accountID"));
 	if err != nil || accountID <= 0{
@@ -39,7 +32,7 @@ func HandleUserWebsocket(c *websocket.Conn){
 	}
 
 	//Mutex lock to avoid race condition because userConnections is not thread-safe.
-	//Not thread-safe means if 2 users or more goroutines shouldn't try to write to the map concurrently
+	//Not thread-safe means if there are 2 users or more goroutines, shouldn't try to write to the map concurrently
 	userConnMutex.Lock()
 	userConnections[accountID] = c
 	userConnMutex.Unlock()
@@ -70,6 +63,7 @@ func HandleUserWebsocket(c *websocket.Conn){
 
 }
 
+//HandleAdminWebSocket sets up connection for the admins. Can send messages to the user that talked to them through the chat box
 func HandleAdminWebSocket(c *websocket.Conn){
 	adminID, err := strconv.Atoi(c.Params("adminID"))
 	if err != nil || adminID <= 0{
@@ -100,7 +94,7 @@ func HandleAdminWebSocket(c *websocket.Conn){
 			break;
 		}
 
-		payload := ChatMessage{}
+		payload := dto.ChatMessage{}
 		if err := json.Unmarshal(msg,&payload); err != nil{
 			log.Println("Invalid message from admin: ",err)
 			continue

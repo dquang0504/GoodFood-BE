@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -19,12 +20,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type PromptRequest struct {
-	Prompt string `json:"prompt"`
-}
-
+//CallVertexAI uses Vertex AI function calling to analyze prompt and execute one of the below functions
 func CallVertexAI(c *fiber.Ctx) error {
-	var body PromptRequest
+	var body dto.PromptRequest
 	if err := c.BodyParser(&body); err != nil {
 		return service.SendError(c, 400, "Invalid prompt!")
 	}
@@ -38,7 +36,7 @@ func CallVertexAI(c *fiber.Ctx) error {
 		return service.SendError(c, 500, err.Error())
 	}
 
-	// ✅ If the model called a function
+	// If the model called a function
 	if len(res.Candidates) > 0 && res.Candidates[0].Content != nil{
 		for _, part := range res.Candidates[0].Content.Parts {
 			if part.FunctionCall != nil {
@@ -82,7 +80,7 @@ func CallVertexAI(c *fiber.Ctx) error {
 		}
 	}
 
-	// ✅ Otherwise, return normal text
+	// Otherwise, return normal text
 	result := ""
 	for _, candidate := range res.Candidates {
 		for _, part := range candidate.Content.Parts {
@@ -99,24 +97,23 @@ func CallVertexAI(c *fiber.Ctx) error {
 	})
 }
 
-//fix cho get_order_status chỉ trả về những hóa đơn của ng đang đăng nhập và suy nghĩ thêm các function mới
+//get_order_status fetches the designated invoice status and return it to the user.
 func get_order_status (c *fiber.Ctx, orderID int) error{
 
+	//Fetch the currently logged in user
 	username := auth.GetAuthenticatedUser(c)
 	if username == "" {
 		return service.SendError(c, 401, "User not authenticated")
 	}
-	fmt.Println("username");
-
 	account, err := models.Accounts(qm.Where("username = ?",username)).One(c.Context(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
+	//Fetch the order
 	order, err := models.Invoices(qm.Where("\"invoiceID\" = ? AND \"accountID\" = ?",orderID,account.AccountID)).One(c.Context(),boil.GetContextDB())
 	if err != nil{
-		if err.Error() == "sql: no rows in result set"{
-			fmt.Println("accountID: ",account.FullName);
+		if errors.Is(err,sql.ErrNoRows){
 			resp, err := utils.GiveAnswerForUnreachableData("user asked for the status of an order, but the order does not exist in the database or it's not THEIR order",c)
 			if err != nil{
 				return service.SendError(c,500,err.Error());
@@ -130,6 +127,7 @@ func get_order_status (c *fiber.Ctx, orderID int) error{
 		return service.SendError(c,500,err.Error());
 	}
 	
+	//If found the order, fetch the order status.
 	orderStatus, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?",order.InvoiceStatusID)).One(context.Background(),boil.GetContextDB());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
@@ -144,15 +142,10 @@ func get_order_status (c *fiber.Ctx, orderID int) error{
 	})
 }
 
-type BestSellingProductResponse struct {
-	ProductID         int    `boil:"productID" json:"productID"`
-	ProductName       string `boil:"productName" json:"productName"`
-	TotalQuantitySold int    `boil:"total_quantity_sold" json:"totalQuantitySold"`
-	ProductImage string `boil:"product_img" json:"productImage"`
-}
 
+//get_top_product returns to the user the product with the most sales.
 func get_top_product (c *fiber.Ctx) error{
-	var response BestSellingProductResponse
+	var response dto.BestSellingProductResponse
 	err := queries.Raw(`
 		SELECT p."productID",
 		p."productName",

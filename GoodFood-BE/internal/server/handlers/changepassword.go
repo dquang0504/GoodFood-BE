@@ -1,57 +1,46 @@
 package handlers
 
 import (
+	"GoodFood-BE/internal/dto"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/models"
-	"context"
-	"fmt"
-
 	"github.com/aarondl/sqlboiler/v4/boil"
-	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type ChangePassResponse struct{
-	AccountID int `json:"accountID"`
-	OldPassword string `json:"oldPassword"`
-	NewPassword string `json:"newPassword"`
-	ConfirmPassword string `json:"confirmPassword"`
-}
-type ChangePassErr struct{
-	ErrOldPassword string `json:"errOldPassword"`
-	ErrNewPassword string `json:"errNewPassword"`
-	ErrConfirmPassword string `json:"errConfirmPassword"`
-	ErrAccount string
-}
+//ChangePasswordSubmit changes the password for users and update corresponding tokens in the process.
 func ChangePasswordSubmit(c *fiber.Ctx) error{
-	body := ChangePassResponse{}
-	err := c.BodyParser(&body);
-	if err != nil{
+	body := dto.ChangePassRequest{}
+	if err := c.BodyParser(&body); err != nil{
 		return service.SendError(c,400,"Invalid body");
 	}
 
-	user, err := models.Accounts(qm.Where("\"accountID\" = ?",body.AccountID)).One(context.Background(),boil.GetContextDB()); 
-	if err!= nil{
-		return service.SendError(c,500,err.Error());
+	//Fetch user
+	user, err := models.FindAccount(c.Context(),boil.GetContextDB(),body.AccountID)
+	if err != nil{
+		return service.SendError(c,404,err.Error());
 	}
 
+	//Validate input
 	if errObj, ok := validateChangePass(&body,*user); !ok{
-		return service.SendErrorStruct(c,500,errObj);
+		return service.SendErrorStruct(c,400,errObj);
 	}
-	//encrypting password
+
+	//Encrypt new password
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword),bcrypt.DefaultCost);
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
+	//Update
 	user.Password = string(hashedPass);
 	_, err = user.Update(c.Context(),boil.GetContextDB(),boil.Infer());
 	if err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
+	//Clear refresh cookie if exists
 	refreshToken := c.Cookies("refreshToken","");
-	fmt.Println(refreshToken)
 	if refreshToken != ""{
 		c.Cookie(&fiber.Cookie{
 			Name: "refreshToken",
@@ -63,7 +52,6 @@ func ChangePasswordSubmit(c *fiber.Ctx) error{
 			SameSite: "None",
 		})
 	}
-	fmt.Println(refreshToken)
 
 	resp := fiber.Map{
 		"status": "Success",
@@ -74,9 +62,10 @@ func ChangePasswordSubmit(c *fiber.Ctx) error{
 	return c.JSON(resp);
 }
 
-func validateChangePass(body *ChangePassResponse, user models.Account) (ChangePassErr, bool){
+//validateChangePass validates input fields when changing password
+func validateChangePass(body *dto.ChangePassRequest, user models.Account) (dto.ChangePassErr, bool){
 	valid := true;
-	error := ChangePassErr{}
+	error := dto.ChangePassErr{}
 	//old password err
 	if len(body.OldPassword) <= 7{
 		error.ErrOldPassword = "Old password needs to be at least 8 characters!";
