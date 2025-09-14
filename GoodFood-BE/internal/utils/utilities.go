@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
 	firebase "firebase.google.com/go"
@@ -107,28 +108,29 @@ func SendMessageCustomerSent(fromEmail string, message string) error {
 	return err
 }
 
-func ClearProductCache(productID int) error{
-	redisSetKey := fmt.Sprintf("product:detail:%d:keys",productID)
 
-	//Fetch all saved cached keys
-	keys, err := redisdatabase.Client.SMembers(redisdatabase.Ctx,redisSetKey).Result()
+func GetCache(key string, target any)(bool,error){
+	cached, err := redisdatabase.Client.Get(redisdatabase.Ctx,key).Result();
 	if err != nil{
-		return fmt.Errorf("failed to get cache keys: %v", err)
+		return false, err
 	}
-	//deleting key one by one
-	if len(keys) > 0{
-		err = redisdatabase.Client.Del(redisdatabase.Ctx,keys...).Err()
-		if err != nil{
-			return fmt.Errorf("failed to delete cached keys: %v",err)
-		}
-	}
-	return nil
+	return json.Unmarshal([]byte(cached), target) == nil, nil
 }
 
-func ClearCartCache(accountID int){
-	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
-	if err := redisdatabase.Client.Del(redisdatabase.Ctx,redisKey).Err(); err != nil{
-		fmt.Println("Failed to clear cache: ",err)
+func SetCache(key string, value any, ttl time.Duration, setKey string){
+	data, _ := json.Marshal(value)
+	redisdatabase.Client.Set(redisdatabase.Ctx,key,data,ttl)
+	if setKey != ""{
+		_ = redisdatabase.Client.SAdd(redisdatabase.Ctx,setKey,key).Err()
+	}
+}
+
+func ClearCache(setKeys ...string){
+	for _,setKey := range setKeys{
+		keys, _ := redisdatabase.Client.SMembers(redisdatabase.Ctx,setKey).Result()
+		if len(keys) > 0{
+			_ = redisdatabase.Client.Del(redisdatabase.Ctx,keys...).Err()
+		}
 	}
 }
 

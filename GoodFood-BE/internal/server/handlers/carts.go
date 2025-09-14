@@ -2,12 +2,10 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/dto"
-	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -28,8 +26,9 @@ func GetCartDetail(c *fiber.Ctx) error{
 	//Create redis key after accountID
 	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID);
 	//Fetch cache
-	if cachedCart,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result(); err == nil{
-		return c.JSON(json.RawMessage(cachedCart))
+	cachedCart := fiber.Map{}
+	if ok, _ := utils.GetCache(redisKey,&cachedCart); ok{
+		return c.JSON(cachedCart)
 	}
 
 	//Fetch DB
@@ -51,9 +50,7 @@ func GetCartDetail(c *fiber.Ctx) error{
 	}
 
 	//Save into cache
-	if data, err := json.Marshal(resp); err != nil{
-		_ = redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,data, 10*time.Minute).Err()
-	}
+	utils.SetCache(redisKey,resp,10*time.Minute,"");
 
 	return c.JSON(resp)
 }
@@ -88,7 +85,8 @@ func Cart_ModifyQuantity(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	utils.ClearCartCache(accountID);
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	utils.ClearCache(redisKey);
 	
 	resp := fiber.Map{
 		"status":"Success",
@@ -122,7 +120,8 @@ func DeleteCartItem(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	utils.ClearCartCache(accountID);
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	utils.ClearCache(redisKey);
 
 	resp := fiber.Map{
 		"status": "Success",
@@ -140,7 +139,8 @@ func AddToCart(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	utils.ClearCartCache(cartDetail.AccountID)
+	redisKey := fmt.Sprintf("cart:accountID=%d:",cartDetail.AccountID)
+	utils.ClearCache(redisKey);
 
 	//Check if the product has already existed in the cart
 	check,err := models.CartDetails(
@@ -240,7 +240,8 @@ func DeleteAllItems(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	utils.ClearCartCache(accountID)
+	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	utils.ClearCache(redisKey);
 
 	resp := fiber.Map{
 		"status":"Success",

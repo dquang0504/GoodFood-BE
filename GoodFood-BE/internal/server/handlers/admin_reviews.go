@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/dto"
-	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -36,9 +34,9 @@ func GetAdminReview(c *fiber.Ctx) error{
 	//Redis cache
 	redisKey := fmt.Sprintf("review:list:page=%d:sort=%s:search=%s:ngayFrom=%s:ngayTo=%s",page,sort,search,dateFrom,dateTo)
 	//Fetch redis key
-	cachedReview, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
-	if err == nil{
-		return c.JSON(json.RawMessage(cachedReview))
+	cachedReview := fiber.Map{}
+	if ok,_ := utils.GetCache(redisKey,&cachedReview); ok{
+		return c.JSON(cachedReview)
 	}
 
 	// Fetch cards
@@ -102,11 +100,7 @@ func GetAdminReview(c *fiber.Ctx) error{
 	}
 
 	//Cache response
-	savingKeyJson, _ := json.Marshal(resp);
-	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10 * 24 * time.Hour)
-	if rdsErr != nil{
-		fmt.Println("Failed to cache review data: ",rdsErr)
-	}
+	utils.SetCache(redisKey,resp,10*24*time.Hour,"");
 
 	return c.JSON(resp);
 }
@@ -122,9 +116,9 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 	//Redis cache
 	redisKey := fmt.Sprintf("reviewAnalysis:list:page=%d:sort=%s",page,sort)
 	//Fetch redis key
-	cachedReviewAnalysis, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
-	if err == nil{
-		return c.JSON(json.RawMessage(cachedReviewAnalysis))
+	cachedReviewAnalysis := fiber.Map{}
+	if ok, _ := utils.GetCache(redisKey,&cachedReviewAnalysis); ok{
+		return c.JSON(cachedReviewAnalysis)
 	}
 
 	//Fetch all reviews to send to python to analyze
@@ -181,12 +175,8 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 		"message": "Successfully fetched review values!",
 	}
 
-	//Cache response
-	savingKeyJson, _ := json.Marshal(resp);
-	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson, 10 * 24 * time.Hour)
-	if rdsErr != nil{
-		fmt.Println("Failed to cache cart data: ",rdsErr)
-	}
+	//Set cache
+	utils.SetCache(redisKey,resp,10 * 24 * time.Hour,"");
 
 	return c.JSON(resp);
 }
@@ -202,10 +192,10 @@ func GetAdminReviewDetail(c *fiber.Ctx) error{
 
 	//Redis cache
 	redisKey := fmt.Sprintf("review:reviewID=%d:",reviewID);
-	//Fetch redisKey
-	cachedReview, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
-	if err == nil{
-		return c.JSON(json.RawMessage(cachedReview))
+	//Fetch cache
+	cachedReview := fiber.Map{}
+	if ok, _ := utils.GetCache(redisKey,&cachedReview); ok{
+		return c.JSON(cachedReview)
 	}
 
 	//Fetch data concurrently
@@ -234,11 +224,7 @@ func GetAdminReviewDetail(c *fiber.Ctx) error{
 	}
 
 	//Cache response
-	savingKeyJson, _ := json.Marshal(response);
-	rdsErr := redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,savingKeyJson,10*24*time.Hour);
-	if rdsErr != nil{
-		fmt.Println("Failed to cache review data: ",rdsErr)
-	}
+	utils.SetCache(redisKey,response,10*24*time.Hour,"")
 
 	return c.JSON(response);
 }

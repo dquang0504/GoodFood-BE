@@ -113,9 +113,10 @@ func AdminProductCreate(c *fiber.Ctx) error{
 	}
 
 	//Clear all redis keys related to products
-	utils.ClearRedisByPattern("products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*");
+	utils.ClearCache("products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*")
 	//Clear all redis keys related to product detail
-	utils.ClearRedisByPattern(fmt.Sprintf("product:detail:%d:filter=*:page=*",insert.ProductID))
+	productDetailKey := fmt.Sprintf("product:detail:%d:filter=*:page=*",insert.ProductID)
+	utils.ClearCache(productDetailKey)
 
 	resp := fiber.Map{
 		"status": "Success",
@@ -197,8 +198,9 @@ func AdminProductUpdate(c *fiber.Ctx) error{
 	}
 
 	//Clear all related redis cache keys related to products
-	utils.ClearRedisByPattern("products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*")
-	utils.ClearRedisByPattern(fmt.Sprintf("product:detail:%d:filter=*:page=*",update.ProductID))
+	utils.ClearCache("products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*")
+	productDetailKey := fmt.Sprintf("product:detail:%d:filter=*:page=*",update.ProductID)
+	utils.ClearCache(productDetailKey)
 
 	resp := fiber.Map{
 		"status": "Success",

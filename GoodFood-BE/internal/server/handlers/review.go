@@ -33,7 +33,7 @@ func GetReviewData(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 
-	response := InvoiceDetailStruct{}
+	response := dto.InvoiceDetailStruct{}
 	for _, detail := range invoiceDetails{
 		check := false;
 		review, err := models.Reviews(
@@ -42,7 +42,7 @@ func GetReviewData(c *fiber.Ctx) error{
 		if err == nil && review != nil{
 			check = true;	
 		}
-		response = InvoiceDetailStruct{
+		response = dto.InvoiceDetailStruct{
 			InvoiceID: detail.InvoiceID,
 			Image: detail.R.ProductIDProduct.CoverImage,
 			Product: *detail.R.ProductIDProduct,
@@ -159,10 +159,8 @@ func HandleSubmitReview(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 	//also clearing product cache after insertion
-	err = utils.ClearProductCache(body.ProductID)
-	if err != nil{
-		fmt.Println("Error clearing product cache: ",err)
-	}
+	redisSetKey := fmt.Sprintf("product:detail:%d:keys",body.ProductID)
+	utils.ClearCache(redisSetKey);
 
 	//insert images into firebase storage
 	uploadedURLs, err := utils.UploadFirebaseImages(imageBinaries,c.Context());

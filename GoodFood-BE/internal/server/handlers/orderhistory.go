@@ -1,31 +1,23 @@
 package handlers
 
 import (
-	redisdatabase "GoodFood-BE/internal/redis-database"
+	"GoodFood-BE/internal/dto"
 	"GoodFood-BE/internal/service"
+	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-	"encoding/json"
 	"fmt"
-	"math"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/aarondl/null/v8"
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
+	"github.com/gofiber/fiber/v2"
 )
 
-type InvoiceList struct{
-	InvoiceID int `boil:"invoice_id" json:"invoiceID"`
-	TotalProducts int `boil:"total_products" json:"totalProducts"`
-	Address string `boil:"address" json:"address"`
-	Status bool `boil:"status" json:"status"`
-	TotalMoney float64 `boil:"total_money" json:"totalMoney"`
-	CancelReason string `boil:"cancel_reason" json:"cancelReason"`
-}
-
+//GetOrderHistory returns a paginated order history list and caches the data into redis for later usages.
 func GetOrderHistory(c *fiber.Ctx) error{
+	//Fetch query params
 	tab := c.Query("tab","Order Placed");
 	accountID := c.QueryInt("accountID",0);
 	if accountID == 0{
@@ -36,20 +28,18 @@ func GetOrderHistory(c *fiber.Ctx) error{
 		return service.SendError(c,400,"Did not receive pageNum");
 	}
 
-	fmt.Println(page);
-
-	offset := (page - 1) * 6;
-
-	//creating redis key
+	//Create redis key
 	redisKey := fmt.Sprintf("orderhistory:tab=%s:page=%d",tab,page);
-	//checking if redis key exists
-	cachedOrderHistory, err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result();
-	if err == nil{
-		return c.JSON(json.RawMessage(cachedOrderHistory))
+	//Fetch cache
+	cachedOrderHistory := fiber.Map{}
+	if ok, _ := utils.GetCache(redisKey,&cachedOrderHistory); ok{
+		return c.JSON(cachedOrderHistory)
 	}
 
-	invoiceList := []InvoiceList{}
-	err = queries.Raw(`
+	//Have to calculate offset before fetching invoiceList
+	offset := (page - 1) * utils.PageSize;
+	invoiceList := []dto.InvoiceList{}
+	err := queries.Raw(`
 		SELECT invoice_detail."invoiceID" as invoice_id, COALESCE(COUNT(invoice_detail."productID"),0) as total_products,
 		invoice."receiveAddress" as address, invoice.status as status, invoice."totalPrice" as total_money,
 		invoice."cancelReason" as cancel_reason
@@ -80,7 +70,7 @@ func GetOrderHistory(c *fiber.Ctx) error{
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
-	totalPage := int(math.Ceil(float64(totalRecords) / 6.0))
+	_, totalPage := utils.Paginate(page,utils.PageSize,totalRecords);
 
 	resp := fiber.Map{
 		"status": "Success",
@@ -90,58 +80,38 @@ func GetOrderHistory(c *fiber.Ctx) error{
 	}
 
 	//saving redis cache for 15 mins
-	jsonData, _ := json.Marshal(resp);
-	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData,15*time.Minute)
-	//add this key to the set tracking all cache keys of this product
 	redisSetKey := fmt.Sprintf("orderhistory:tab:%s",tab);
-	err = redisdatabase.Client.SAdd(redisdatabase.Ctx,redisSetKey,redisKey).Err()
-	if err != nil{
-		fmt.Println("Error adding redis key to set: ", err)
-	}
+	utils.SetCache(redisKey,resp,15*time.Minute,redisSetKey);
 
 	return c.JSON(resp);
-
 }
 
+//CancelOrder changes the status of an order from "Order Placed" to "Cancelled" along with cancelReason.
 func CancelOrder(c *fiber.Ctx) error{
-	var invoice InvoiceList
+	//Fetch query param
 	invoiceID := c.QueryInt("invoiceID",0);
 	if invoiceID == 0{
 		return service.SendError(c,400, "Did not receive invoiceID!");
 	}
+
+	var invoice dto.InvoiceList
 	if err := c.BodyParser(&invoice); err != nil{
 		return service.SendError(c,400,err.Error());
 	}
 
-	toUpdate, err := models.Invoices(qm.Where("\"invoiceID\" = ?",invoiceID)).One(c.Context(),boil.GetContextDB());
+	//Update
+	toUpdate, err := models.FindInvoice(c.Context(),boil.GetContextDB(),invoiceID)
 	if err != nil {
 		return service.SendError(c,500,err.Error());
 	}
-	
 	toUpdate.InvoiceStatusID = 6
 	toUpdate.CancelReason = null.StringFrom(invoice.CancelReason)
-	_ ,err = toUpdate.Update(c.Context(),boil.GetContextDB(),boil.Infer());
-	if err != nil{
+	if _ ,err = toUpdate.Update(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
 		return service.SendError(c,500,err.Error());
 	}
 
-	// Tabs that need to be renewed
-	tabs := []string{"Order Placed", "Cancelled"}
-
-	for _, t := range tabs {
-		redisSetKey := fmt.Sprintf("orderhistory:tab:%s", t)
-		keys, err := redisdatabase.Client.SMembers(redisdatabase.Ctx, redisSetKey).Result()
-		if err != nil {
-			fmt.Printf("Error getting keys from set %s: %v\n", redisSetKey, err)
-			continue
-		}
-
-		if len(keys) > 0 {
-			if err := redisdatabase.Client.Del(redisdatabase.Ctx, keys...).Err(); err != nil {
-				fmt.Printf("Error deleting keys for tab %s: %v\n", t, err)
-			}
-		}
-	}
+	//Caches that need to be renewed
+	utils.ClearCache("orderhistory:tab:Order Placed","orderhistory:tab:Cancelled");
 
 	resp := fiber.Map{
 		"status": "Success",
@@ -150,20 +120,11 @@ func CancelOrder(c *fiber.Ctx) error{
 	}
 
 	return c.JSON(resp);
-
 }
 
-type InvoiceDetailStruct struct{
-	InvoiceID int `boil:"invoice_id" json:"invoiceID"`
-	Image string `boil:"image" json:"image"`
-	Product models.Product `boil:"product" json:"product"`
-	Quantity int `boil:"quantity" json:"quantity"`
-	TotalMoney float64 `boil:"total_money" json:"totalMoney"`
-	ShippingFee float64 `boil:"shipping_fee" json:"shippingFee"`
-	ReviewCheck bool `json:"reviewCheck"`
-}
-
+//GetOrderHistoryDetails returns the details of an invoice when clicked on.
 func GetOrderHistoryDetail(c *fiber.Ctx) error{
+	//Fetch query param
 	invoiceID := c.QueryInt("invoiceID",0);
 	if invoiceID == 0{
 		return service.SendError(c,400,"Did not receive invoiceID!");
@@ -178,33 +139,28 @@ func GetOrderHistoryDetail(c *fiber.Ctx) error{
 		return service.SendError(c,500,err.Error());
 	}
 
-	response := make([]InvoiceDetailStruct,len(invoiceDetails));
+	//Response mapping
+	response := make([]dto.InvoiceDetailStruct,len(invoiceDetails));
 	for i, detail := range invoiceDetails{
-		check := false;
-		review, err := models.Reviews(
+		reviewExists, _ := models.Reviews(
 			qm.Where("\"productID\" = ?",detail.R.ProductIDProduct.ProductID),
-		).One(c.Context(),boil.GetContextDB());
-		if err == nil && review != nil{
-			check = true;	
-		}
-		response[i] = InvoiceDetailStruct{
+		).Exists(c.Context(),boil.GetContextDB());
+
+		response[i] = dto.InvoiceDetailStruct{
 			InvoiceID: detail.InvoiceID,
 			Image: detail.R.ProductIDProduct.CoverImage,
 			Product: *detail.R.ProductIDProduct,
 			Quantity: detail.Quantity,
 			TotalMoney: float64(detail.Price),
 			ShippingFee: float64(detail.R.InvoiceIDInvoice.ShippingFee),
-			ReviewCheck: check,
+			ReviewCheck: reviewExists,
 		}
-		
 	}
-
-
 
 	resp := fiber.Map{
 		"status": "Success",
 		"data": response,
-		"message": "Successfully fetched receipt details!",
+		"message": "Successfully fetched invoice details!",
 	}
 
 	return c.JSON(resp);

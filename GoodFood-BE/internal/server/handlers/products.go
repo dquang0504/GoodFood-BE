@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"GoodFood-BE/internal/dto"
-	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-	"encoding/json"
 	"fmt"
 	"time"
 	"github.com/go-resty/resty/v2"
@@ -86,12 +84,7 @@ func GetProductsByPage(c *fiber.Ctx) error{
 	}
 
 	//saving redis key to redis database for 10 mins 
-	jsonData, _ := json.Marshal(resp); 
-	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData, 10*time.Minute); 
-	rdsErr := redisdatabase.Client.SAdd(redisdatabase.Ctx,"products:keys",redisKey) 
-	if rdsErr != nil{ 
-		fmt.Println("Error adding redis key to set: ", rdsErr) 
-	}
+	utils.SetCache(redisKey,resp,10*time.Minute,"products:keys")
 
 	return c.JSON(resp);
 }
@@ -146,9 +139,9 @@ func GetDetail(c *fiber.Ctx) error{
 	//Redis key
 	redisKey := fmt.Sprintf("product:detail:%d:filter=%s:page=%d",id,filter,page)
 	//Fetch redis cache
-	cachedDetail,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
-	if err == nil{
-		return c.JSON(json.RawMessage(cachedDetail))
+	cachedDetail := fiber.Map{}
+	if ok, _ := utils.GetCache(redisKey,&cachedDetail); ok{
+		return c.JSON(cachedDetail)
 	}
 	
 	// Build product detail response
@@ -165,14 +158,8 @@ func GetDetail(c *fiber.Ctx) error{
 	}
 
 	//Saving redis cache for 30 mins
-	jsonData, _ := json.Marshal(resp)
-	redisdatabase.Client.Set(redisdatabase.Ctx,redisKey,jsonData,30*time.Minute)
-	//add this key to the set tracking all cache keys of this product
 	redisSetKey := fmt.Sprintf("product:detail:%d:keys",id)
-	err = redisdatabase.Client.SAdd(redisdatabase.Ctx,redisSetKey,redisKey).Err()
-	if err != nil{
-		fmt.Println("Error adding redis key to set: ", err)
-	}
+	utils.SetCache(redisKey,resp,30*time.Minute,redisSetKey);
 
 	return c.JSON(resp);
 }
