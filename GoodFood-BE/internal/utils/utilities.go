@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -283,25 +282,6 @@ type FacebookUserStruct struct{
 			URL string `json:"url"`
 		} `json:"data"`
 	}`json:"picture"`
-}
-
-func GetFacebookUserInfo(accessToken string)(*FacebookUserStruct,error){
-	resp, err := http.Get("https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=" + url.QueryEscape(accessToken))
-	if err != nil{
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200{
-		return nil,fmt.Errorf("Facebook API eror: %v",resp.Status)
-	}
-
-	var fbUser FacebookUserStruct
-	if err := json.NewDecoder(resp.Body).Decode(&fbUser); err != nil{
-		return nil, err
-	}
-
-	return &fbUser, nil
 }	
 
 func FunctionDeclaration() []*genai.FunctionDeclaration {

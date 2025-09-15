@@ -14,3 +14,25 @@ type UserError struct{
 	ErrEmail string `json:"errEmail"`
 	ErrPassword string `json:"errPassword"`
 }
+
+type OAuthLoginStruct struct{
+	AccessToken string `json:"accessToken"`
+}
+
+type ForgotPassStruct struct{
+	Email string `json:"email"`
+	CodeOTP string `json:"codeOTP"`
+}
+
+type ResetPass struct{
+	Token string `json:"token"`
+	NewPass string `json:"newPass"`
+	ConfirmPass string `json:"confirmPass"`
+	Email string `json:"email"`
+}
+
+type ContactResponse struct{
+	Fullname string `json:"name"`
+	Email string `json:"fromEmail"`
+	Message string `json:"content"`
+}
