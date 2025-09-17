@@ -73,14 +73,20 @@ func HandleOAuthLogin(c *fiber.Ctx, provider, providerUserID, email, fullName, a
 	return LoginWithAccount(c, &newUser)
 }
 
+// LoginWithAccount issues tokens and saves refresh token to redis
 func LoginWithAccount(c *fiber.Ctx, acc *models.Account) error{
-	//provide user with a token
-	accessToken,refreshToken,sessionID, err := auth.CreateToken(acc.Username,"")
-	if err != nil{
-		return service.SendError(c,500,"No username found!")
+	accessToken, refreshToken, jti, err := auth.CreateToken(acc.Username)
+	if err != nil {
+		return service.SendError(c, 500, "Failed to create tokens")
 	}
 
-	//set refreshToken and httpOnly cookie
+	// Save refresh token into redis (store userAgent and IP as metadata)
+	userAgent := c.Get("User-Agent")
+	ip := c.IP()
+	claims, _ := auth.VerifyToken(refreshToken)
+	_ = auth.SaveRefreshToken(jti,refreshToken,acc.Username,userAgent,ip,claims.ExpiresAt.Time)
+
+	//Set refreshToken into httpOnly cookie
 	SaveCookie(refreshToken,c);
 
 	response := fiber.Map{
@@ -88,8 +94,6 @@ func LoginWithAccount(c *fiber.Ctx, acc *models.Account) error{
 		"data": fiber.Map{
 			"user": acc,
 			"accessToken": accessToken,
-			"refreshToken": refreshToken,
-			"sessionID": sessionID,
 		},
 		"message": "Login successful!",
 	}

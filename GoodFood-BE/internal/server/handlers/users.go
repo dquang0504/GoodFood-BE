@@ -256,7 +256,7 @@ func ValidateResetToken(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
-//HandleResetPassword updates password if token is valid.
+// HandleResetPassword updates password if token is valid.
 func HandleResetPassword(c *fiber.Ctx) error {
 	body := dto.ResetPass{}
 	err := c.BodyParser(&body)
@@ -284,7 +284,7 @@ func HandleResetPassword(c *fiber.Ctx) error {
 
 	//Delete token from redis - one-time use
 	redisKey := fmt.Sprintf("resetPass:token=%s", body.Token)
-	utils.ClearCache(redisKey);
+	utils.ClearCache(redisKey)
 
 	resp := fiber.Map{
 		"status":  "Success",
@@ -293,45 +293,35 @@ func HandleResetPassword(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// RefreshToken handles refresh token rotation
 func RefreshToken(c *fiber.Ctx) error {
-	//Fetch sessionID from response
-	var req struct {
-		SessionID string `json:"sessionID"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return service.SendError(c, 401, "Mising sessionID")
-	}
-
-	cookie := c.Cookies("refreshToken")
-	if cookie == "" {
+	refreshToken := c.Cookies("refreshToken")
+	if refreshToken == "" {
 		return service.SendError(c, 401, "No refresh token")
 	}
-
-	//Verify refreshToken
-	claims, err := auth.VerifyToken(cookie)
+	userAgent := c.Get("User-Agent")
+	ip := c.IP()
+	newAccess, newRefresh, _, err := auth.ValidateRefreshAndRotate(refreshToken, userAgent, ip)
 	if err != nil {
-		return service.SendError(c, 401, "Invalid refresh token")
+		return service.SendError(c, 401, err.Error())
 	}
 
-	if claims.SessionID != req.SessionID { //check for matching sessionID
-		fmt.Println("claims ID: ", claims.SessionID)
-		fmt.Println("req session ID: ", req.SessionID)
-		return service.SendError(c, 401, "Session mismatch")
-	}
+	// set new refresh cookie
+	utils.SaveCookie(newRefresh, c)
+	return c.JSON(fiber.Map{"status": "Success", "accessToken": newAccess})
+}
 
-	fmt.Println("claims ID current: ", claims.SessionID)
-
-	//Generate new accessToken
-	accessToken, _, _, err := auth.CreateToken(claims.Username, claims.SessionID)
-	if err != nil {
-		return service.SendError(c, 500, "Cound not generate token")
+// HandleLogout revokes current refresh token
+func HandleLogout(c *fiber.Ctx) error {
+	refreshToken := c.Cookies("refreshToken")
+	if refreshToken != "" {
+		claims, err := auth.VerifyToken(refreshToken)
+		if err == nil {
+			_ = auth.RevokeRefreshToken(claims.ID)
+		}
 	}
-
-	response := fiber.Map{
-		"status":      "Success",
-		"accessToken": accessToken,
-	}
-	return c.JSON(response)
+	utils.SaveCookie("", c) // clear
+	return c.JSON(fiber.Map{"status": "Success", "message": "Logged out"})
 }
 
 func HandleContact(c *fiber.Ctx) error {

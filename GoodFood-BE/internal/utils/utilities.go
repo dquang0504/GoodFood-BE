@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"GoodFood-BE/internal/auth"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/internal/service"
 	"context"
@@ -252,27 +251,6 @@ func UploadFirebaseImages(images map[string][]byte, ctx context.Context) (map[st
 	return uploadedURLs, nil
 }
 
-func CreateTokenForUser(ctx *fiber.Ctx,username string) (accessToken string, error error){
-	//provide user with a token
-	accessToken,refreshToken,_, err := auth.CreateToken(username,"")
-	if err != nil{
-		return "",err;
-	}
-
-	//set refreshToken as HTTP-only Cookie
-	ctx.Cookie(&fiber.Cookie{
-		Name: "refreshToken",
-		Value: refreshToken,
-		Path: "/",
-		MaxAge: 7*24*60*60, //7 days
-		HTTPOnly: true,
-		Secure: false, //Switch to `true` if running HTTPS
-		SameSite: "None",
-	})
-
-	return accessToken,nil;
-}
-
 type FacebookUserStruct struct{
 	ID string `json:"id"`
 	Name string `json:"name"`
@@ -285,7 +263,7 @@ type FacebookUserStruct struct{
 }	
 
 func FunctionDeclaration() []*genai.FunctionDeclaration {
-	// ✅ Function declaration
+	// Function declaration
 	functions := []*genai.FunctionDeclaration{
 		{
 			Name: "get_order_status",
@@ -352,7 +330,7 @@ func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.Generat
 		return nil,service.SendError(c, 500, "Failed to create client: "+err.Error())
 	}
 
-	// ✅ Generation config with function calling
+	// Generation config with function calling
 	config := &genai.GenerateContentConfig{
 		MaxOutputTokens: 1024,
 		Temperature:     Float32Ptr(0.7),
@@ -365,7 +343,7 @@ func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.Generat
 		}
 	}
 
-	// ✅ Prompt
+	// Prompt
 	contents := []*genai.Content{
 		{
 			Role: "user",
@@ -376,7 +354,7 @@ func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.Generat
 		},
 	}
 
-	// ✅ Generate content
+	// Generate content
 	res, err := client.Models.GenerateContent(c.Context(),
 		os.Getenv("VERTEX_AI_MODEL"),
 		contents,
@@ -399,7 +377,7 @@ func GiveStructuredAnswer(question string,prompt string, c *fiber.Ctx) (string, 
 		return "", err
 	}
 
-	// 🟢 DEBUG: In toàn bộ response
+	// DEBUG: In toàn bộ response
 	fmt.Printf("Full response: %+v\n", len(res.Candidates))
 
 	result := ""
