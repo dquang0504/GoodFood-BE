@@ -29,7 +29,7 @@ func GetOrderHistory(c *fiber.Ctx) error{
 	}
 
 	//Create redis key
-	redisKey := fmt.Sprintf("orderhistory:tab=%s:page=%d",tab,page);
+	redisKey := fmt.Sprintf("orderhistory:accountID=%d:tab=%s:page=%d",accountID,tab,page);
 	//Fetch cache
 	cachedOrderHistory := fiber.Map{}
 	if ok, _ := utils.GetCache(redisKey,&cachedOrderHistory); ok{
@@ -80,7 +80,7 @@ func GetOrderHistory(c *fiber.Ctx) error{
 	}
 
 	//saving redis cache for 15 mins
-	redisSetKey := fmt.Sprintf("orderhistory:tab:%s",tab);
+	redisSetKey := fmt.Sprintf("orderhistory:accountID=%d:tab:%s",accountID,tab);
 	utils.SetCache(redisKey,resp,15*time.Minute,redisSetKey);
 
 	return c.JSON(resp);
@@ -111,7 +111,9 @@ func CancelOrder(c *fiber.Ctx) error{
 	}
 
 	//Caches that need to be renewed
-	utils.ClearCache("orderhistory:tab:Order Placed","orderhistory:tab:Cancelled");
+	tab1 := fmt.Sprintf("orderhistory:accountID=%d:tab=%s",toUpdate.AccountID,utils.StatusOrderPlaced)
+	tab2 := fmt.Sprintf("orderhistory:accountID=%d:tab=%s",toUpdate.AccountID,utils.StatusCancelled)
+	utils.ClearCache(tab1,tab2); 
 
 	resp := fiber.Map{
 		"status": "Success",
