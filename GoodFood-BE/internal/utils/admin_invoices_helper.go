@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/aarondl/null/v8"
-	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/boil"
+	"github.com/aarondl/sqlboiler/v4/queries"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"
 	"gopkg.in/gomail.v2"
@@ -36,20 +36,21 @@ func FetchCards[T any](c *fiber.Ctx, query string, dest *T) (*T, error) {
 func ParseDateRange(dateFromStr string, dateToStr string) (time.Time, time.Time, error) {
 	var dateFrom, dateTo time.Time
 	var err error
-	if dateFromStr != "" {
-		dateFrom, err = time.Parse("2006-01-02", dateFromStr)
-		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom/dateTo (expect yyyy-mm-dd)")
-		}
-	}
-	if dateToStr != "" {
-		dateTo, err = time.Parse("2006-01-02", dateToStr)
-		if err != nil {
-			return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom/dateTo (expect yyyy-mm-dd)")
-		}
+
+	if dateFromStr == "" || dateToStr == "" {
+		return time.Time{}, time.Time{}, errors.New("Date from or date to is empty!")
 	}
 
-	if dateTo.Before(dateFrom){
+	dateFrom, err = time.Parse("2006-01-02", dateFromStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom/dateTo (expect yyyy-mm-dd)")
+	}
+	dateTo, err = time.Parse("2006-01-02", dateToStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("Invalid format for dateFrom/dateTo (expect yyyy-mm-dd)")
+	}
+
+	if dateTo.Before(dateFrom) {
 		return time.Time{}, time.Time{}, errors.New("Date to can't be before date from")
 	}
 
@@ -105,7 +106,7 @@ func MapInvoices(invoices []*models.Invoice) []dto.InvoiceResponse {
 func FetchInvoiceAndStatus(c *fiber.Ctx, invoiceID int) (*models.Invoice, *models.InvoiceStatus, error) {
 	invoice, err := models.Invoices(qm.Where("\"invoiceID\" = ?", invoiceID)).One(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return nil, nil, errors.New("Invoice not found!");
+		return nil, nil, errors.New("Invoice not found!")
 	}
 	status, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?", invoice.InvoiceStatusID)).One(c.Context(), boil.GetContextDB())
 	if err != nil {
@@ -214,8 +215,8 @@ func SendOrderCancelEmail(toEmail string, reason string, isPaid bool) error {
 	mailer.SetHeader("Subject", "❌ Order Cancellation Notice from GoodFood24h")
 
 	//Build mail content
-	body := BuildCancelEmailBody(reason,isPaid)
-	mailer.SetBody("text/html",body)
+	body := BuildCancelEmailBody(reason, isPaid)
+	mailer.SetBody("text/html", body)
 
 	//Gmail SMTP
 	dialer := gomail.NewDialer("smtp.gmail.com", 587, "williamdang0404@gmail.com", "yhjd uzhk hhvp zfiq")

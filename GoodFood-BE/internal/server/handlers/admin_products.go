@@ -13,216 +13,222 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-//GetAdminProductsData fetches products with pagination, sorting, searching.
-func GetAdminProducts(c *fiber.Ctx) error{
-	page := c.QueryInt("page",1);
-	sort := c.Query("sort","");
-	search := c.Query("search","");
+// GetAdminProductsData fetches products with pagination, sorting, searching.
+func GetAdminProducts(c *fiber.Ctx) error {
+	page := c.QueryInt("page", 0);
+	if page == 0{
+		return service.SendError(c,400,"Did not receive page");
+	}
+	sort := c.Query("sort", "")
+	search := c.Query("search", "")
 
 	query := `SELECT COALESCE(COUNT(*),0) AS totalproduct,
 		COUNT(CASE WHEN status = false THEN 1 END) AS totalinactive
 		FROM product
 	`
-	cards, err := utils.FetchCards(c,query,&dto.ProductCards{})
-	products, listLoaiSP, totalPage, err := utils.GetAdminProductsUtil(c,page,search,sort);
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	cards, err := utils.FetchCards(c, query, &dto.ProductCards{})
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
+	}
+	products, listLoaiSP, totalPage, err := utils.GetAdminProductsUtil(c, page, search, sort)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": products,
-		"cards": cards,
+		"status":     "Success",
+		"data":       products,
+		"cards":      cards,
 		"listLoaiSP": listLoaiSP,
-		"totalPage": totalPage,
-		"message": "Successfully fetched products values",
+		"totalPage":  totalPage,
+		"message":    "Successfully fetched products values",
 	}
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-//GetAdminProductDetail returns detailed info of a product including type and images.
-func GetAdminProductDetail(c *fiber.Ctx) error{
-	productID := c.QueryInt("productID",0);
-	if productID == 0{
-		return service.SendError(c,400,"Did not receive productID!");
+// GetAdminProductDetail returns detailed info of a product including type and images.
+func GetAdminProductDetail(c *fiber.Ctx) error {
+	productID := c.QueryInt("productID", 0)
+	if productID == 0 {
+		return service.SendError(c, 400, "Did not receive productID!")
 	}
 
 	//Fetch product with relations (type + images)
-	product, err := models.Products(qm.Where("\"productID\" = ?",productID), qm.Load(models.ProductRels.ProductTypeIDProductType),qm.Load(models.ProductRels.ProductIDProductImages)).One(c.Context(),boil.GetContextDB());
-	if err != nil && err != sql.ErrNoRows{
-		return service.SendError(c,500,err.Error());
+	product, err := models.Products(qm.Where("\"productID\" = ?", productID), qm.Load(models.ProductRels.ProductTypeIDProductType), qm.Load(models.ProductRels.ProductIDProductImages)).One(c.Context(), boil.GetContextDB())
+	if err != nil{
+		return service.SendError(c, 500, "Product not found!")
 	}
 
 	//Build response
 	response := dto.ProductResponse{
-		Product:      *product,
-		ProductType:  *product.R.ProductTypeIDProductType,
+		Product:     *product,
+		ProductType: *product.R.ProductTypeIDProductType,
 	}
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": response,
+		"status":     "Success",
+		"data":       response,
 		"listHinhSP": product.R.ProductIDProductImages,
-		"message": "Successfully fetched products detail",
+		"message":    "Successfully fetched products detail",
 	}
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-//AdminProductCreate creates a new product record in table Product
-//Returns insert information
-func AdminProductCreate(c *fiber.Ctx) error{
+// AdminProductCreate creates a new product record in table Product
+// Returns insert information
+func AdminProductCreate(c *fiber.Ctx) error {
 	var insert dto.ProductResponse
-	if err := c.BodyParser(&insert); err != nil{
-		return service.SendError(c,400,"Invalid body!");
+	if err := c.BodyParser(&insert); err != nil {
+		return service.SendError(c, 400, "Invalid request body")
 	}
 
 	//Validate input before inserting
-	if valid, errObj := validationProduct(&insert, true); !valid{
-		return service.SendErrorStruct(c,400,errObj);
+	if valid, errObj := validationProduct(&insert, true); !valid {
+		return service.SendErrorStruct(c, 400, errObj)
 	}
 
 	//Use transaction for safety
-	db, ok := boil.GetContextDB().(*sql.DB);
+	db, ok := boil.GetContextDB().(*sql.DB)
 	if !ok {
 		return service.SendError(c, 500, "Invalid DB instance")
 	}
-	tx, err := db.BeginTx(c.Context(),nil);
-	if err != nil{
-		return service.SendError(c,500,"Failed to start transaction")
+	tx, err := db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return service.SendError(c, 500, "Failed to start transaction")
 	}
 	defer tx.Rollback() //rollback if anything fails
 
 	//Insert product
-	if err := insert.Product.Insert(c.Context(),tx,boil.Infer());err != nil{
-		return service.SendError(c,500,err.Error());
+	if err := insert.Product.Insert(c.Context(), tx, boil.Infer()); err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	//Insert product images
-	for i := range insert.ProductImages{
+	for i := range insert.ProductImages {
 		insert.ProductImages[i].ProductID = insert.ProductID
-		if err = insert.ProductImages[i].Insert(c.Context(),tx,boil.Infer()); err != nil{
-			return service.SendError(c,500,err.Error()+"over here productImgs");
+		if err = insert.ProductImages[i].Insert(c.Context(), tx, boil.Infer()); err != nil {
+			return service.SendError(c, 500, err.Error()+"over here productImgs")
 		}
 	}
 
 	//Commit transaction if everything succeeds
-	if err := tx.Commit(); err != nil{
-		return service.SendError(c,500,"Failed to commit transaction")
+	if err := tx.Commit(); err != nil {
+		return service.SendError(c, 500, "Failed to commit transaction")
 	}
 
 	//Clear all redis keys related to products
 	utils.ClearCache("products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*")
 	//Clear all redis keys related to product detail
-	productDetailKey := fmt.Sprintf("product:detail:%d:filter=*:page=*",insert.ProductID)
+	productDetailKey := fmt.Sprintf("product:detail:%d:filter=*:page=*", insert.ProductID)
 	utils.ClearCache(productDetailKey)
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": insert,
+		"status":  "Success",
+		"data":    insert,
 		"message": "Successfully created new product",
 	}
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-//AdminProductUpdate updates an existing product record in table Product
-//Returns insert information
-func AdminProductUpdate(c *fiber.Ctx) error{
+// AdminProductUpdate updates an existing product record in table Product
+// Returns insert information
+func AdminProductUpdate(c *fiber.Ctx) error {
 	//Fetch payload and query params
 	update := dto.ProductResponse{}
-	productID := c.QueryInt("productID",0);
-	if productID == 0{
-		return service.SendError(c,400,"Did not receive productID");
+	productID := c.QueryInt("productID", 0)
+	if productID == 0 {
+		return service.SendError(c, 400, "Did not receive productID")
 	}
-	if err := c.BodyParser(&update); err != nil{
-		return service.SendError(c,400,"Invalid body!");
+	if err := c.BodyParser(&update); err != nil {
+		return service.SendError(c, 400, "Invalid request body")
 	}
 
 	//Validate input
-	if valid, errObj := validationProduct(&update, false); !valid{
-		return service.SendErrorStruct(c,400,errObj);
+	if valid, errObj := validationProduct(&update, false); !valid {
+		return service.SendErrorStruct(c, 400, errObj)
 	}
 
 	//Fetch DB connection
-	db, ok := boil.GetContextDB().(*sql.DB);
+	db, ok := boil.GetContextDB().(*sql.DB)
 	if !ok {
-		return service.SendError(c,500,"Invalid DB instance")
+		return service.SendError(c, 500, "Invalid DB instance")
 	}
 
 	//Commence the transaction
-	tx, err := db.BeginTx(c.Context(),nil)
-	if err != nil{
-		return service.SendError(c,500,err.Error())
+	tx, err := db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	defer tx.Rollback();
+	defer tx.Rollback()
 
 	//Check if product previously had a coverImg
-	product, err := models.Products(qm.Where("\"productID\" = ?",productID)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	product, err := models.Products(qm.Where("\"productID\" = ?", productID)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, "Product not found!")
 	}
-	if product.CoverImage != ""{
+	if product.CoverImage != "" {
 		update.CoverImage = product.CoverImage
 	}
 
 	//Update product
-	_,err = update.Update(c.Context(),tx,boil.Infer());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	_, err = update.Update(c.Context(), tx, boil.Infer())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	
+
 	//If there are new images uploaded, replace old images with new ones
-	if len(update.ProductImages) > 0{
+	if len(update.ProductImages) > 0 {
 		//Delete old images of the product
-		oldImgs,err := models.ProductImages(qm.Where("\"productID\" = ?",update.ProductID)).All(c.Context(),boil.GetContextDB());
-		if err != nil{
-			return service.SendError(c,500,err.Error());
+		oldImgs, err := models.ProductImages(qm.Where("\"productID\" = ?", update.ProductID)).All(c.Context(), boil.GetContextDB())
+		if err != nil {
+			return service.SendError(c, 500, err.Error())
 		}
-		if _,err = oldImgs.DeleteAll(c.Context(),tx); err != nil{
-			return service.SendError(c,500,err.Error());
+		if _, err = oldImgs.DeleteAll(c.Context(), tx); err != nil {
+			return service.SendError(c, 500, err.Error())
 		}
 		//Iterate through new images and start inserting
-		for i := range update.ProductImages{
-			update.ProductImages[i].ProductID = update.ProductID;
-			if err := update.ProductImages[i].Insert(c.Context(),tx,boil.Infer()); err != nil{
-				return service.SendError(c,500,err.Error());
+		for i := range update.ProductImages {
+			update.ProductImages[i].ProductID = update.ProductID
+			if err := update.ProductImages[i].Insert(c.Context(), tx, boil.Infer()); err != nil {
+				return service.SendError(c, 500, err.Error())
 			}
 		}
 	}
 
 	//Commit transaction
-	if err := tx.Commit(); err != nil{
-		return service.SendError(c,500, err.Error())
+	if err := tx.Commit(); err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	//Clear all related redis cache keys related to products
 	utils.ClearCache("products:page=*:type=*:search=*:minPrice=*:maxPrice=*:orderByPrice=*")
-	productDetailKey := fmt.Sprintf("product:detail:%d:filter=*:page=*",update.ProductID)
+	productDetailKey := fmt.Sprintf("product:detail:%d:filter=*:page=*", update.ProductID)
 	utils.ClearCache(productDetailKey)
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": update,
+		"status":  "Success",
+		"data":    update,
 		"message": "Successfully updated the product",
 	}
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-func validationProduct(product *dto.ProductResponse, diff bool) (bool,dto.ProductError){
+func validationProduct(product *dto.ProductResponse, diff bool) (bool, dto.ProductError) {
 	var errResp dto.ProductError
 	isValid := true
-	if product.ProductName == ""{
+	if product.ProductName == "" {
 		errResp.ErrProductName = "Please input product name!"
 		isValid = false
 	}
-	if product.Price < 0{
+	if product.Price < 0 {
 		errResp.ErrPrice = "Price can't be lower than 0!"
 		isValid = false
 	}
-	if product.Weight < 0{
+	if product.Weight < 0 {
 		errResp.ErrWeight = "Weight can't be lower than 0!"
 		isValid = false
 	}
@@ -230,9 +236,9 @@ func validationProduct(product *dto.ProductResponse, diff bool) (bool,dto.Produc
 		errResp.ErrType = "Please choose product type!"
 		isValid = false
 	}
-	if len(product.ProductImages) == 0 && diff{
+	if len(product.ProductImages) == 0 && diff {
 		errResp.ErrImages = "Please upload the product's image!"
 		isValid = false
 	}
-	return isValid,errResp
+	return isValid, errResp
 }

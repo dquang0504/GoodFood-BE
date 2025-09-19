@@ -31,4 +31,11 @@ var(
 		Invoices: &InvoiceSeed{seedInvoice: true,numberOfRecords: 6},
 		InvoiceDetails: &InvoiceDetailSeed{seedInvoiceDetail: true,numberOfRecords: 6},
 	}
+
+	//Seed basic products - 12 products
+	SeedProductsBasic = SeedConfig{
+		ProductTypes: &ProductTypeSeed{seedProductType: true,numberOfRecords: 12},
+		Products: &ProductSeed{seedProduct: true,numberOfRecords: 12},
+		ProductImages: &ProductImageSeed{seedProductImage: true,numberOfRecords: 12},
+	}
 )

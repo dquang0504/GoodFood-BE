@@ -204,6 +204,17 @@ func SeedData(t *testing.T, cfg SeedConfig) {
 		}
 	}
 
+	//Seed data for table product images
+	if cfg.ProductImages != nil && cfg.ProductImages.seedProductImage{
+		for i := 0; i < cfg.ProductImages.numberOfRecords; i++{
+			_, err := testdb.Exec(`
+                INSERT INTO product_images
+                (image,"productID")
+            VALUES($1,$2)`,fmt.Sprintf("Image %d",i+1),fmt.Sprintf("%d",i+1))
+            assert.NoError(t, err)
+		}
+	}
+
 	//Seed data for table invoice detail
 	if cfg.InvoiceDetails != nil && cfg.InvoiceDetails.seedInvoiceDetail{
 		if cfg.Invoices != nil{
@@ -244,6 +255,11 @@ type ProductTypeSeed struct{
 	numberOfRecords int
 }
 
+type ProductImageSeed struct{
+	seedProductImage bool
+	numberOfRecords int
+}
+
 type InvoiceDetailSeed struct{
 	seedInvoiceDetail bool
 	numberOfRecords int
@@ -256,6 +272,7 @@ type SeedConfig struct {
 	InvoiceDetails  *InvoiceDetailSeed
 	Products *ProductSeed
 	ProductTypes *ProductTypeSeed
+	ProductImages *ProductImageSeed
 	Provinces bool
 	Districts bool
 	Wards     bool

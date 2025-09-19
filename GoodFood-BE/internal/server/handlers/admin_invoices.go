@@ -5,6 +5,8 @@ import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
+	"time"
+
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
 	"github.com/gofiber/fiber/v2"
@@ -29,10 +31,16 @@ func GetAdminInvoice(c *fiber.Ctx) error{
 	}
 	sort := c.Query("sort","");
 	search := c.Query("search","")
-	dateFrom, dateTo, err := utils.ParseDateRange(c.Query("dateFrom", ""), c.Query("dateTo", ""));
-	if err != nil{
-		return service.SendError(c,400,err.Error());
+	var(dateFrom time.Time; dateTo time.Time)
+	
+	if(sort=="Created at"){
+		dateFrom, dateTo, err = utils.ParseDateRange(c.Query("dateFrom", ""), c.Query("dateTo", ""));
+		if err != nil{
+			return service.SendError(c,400,err.Error());
+		}
 	}
+
+	
 
 	//Build query modifiers (both for fetching data and counting)
 	queryMods, queryModsTotal, err := utils.BuildInvoiceFilters(c,search,sort,dateFrom,dateTo);

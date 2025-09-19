@@ -5,9 +5,7 @@ import (
 	"GoodFood-BE/internal/service"
 	"GoodFood-BE/internal/utils"
 	"GoodFood-BE/models"
-	"database/sql"
-	"errors"
-	"math"
+	"context"
 
 	"github.com/aarondl/sqlboiler/v4/boil"
 	"github.com/aarondl/sqlboiler/v4/queries/qm"
@@ -16,9 +14,11 @@ import (
 
 //GetAdminProductTypes fetches product types with pagination, searching and number of products in each type.
 func GetAdminProductTypes(c *fiber.Ctx) error {
-	page := c.QueryInt("page", 1)
+	page := c.QueryInt("page", 0)
+	if page == 0{
+		return service.SendError(c,400,"Did not receive page")
+	}
 	search := c.Query("search", "")
-	offset := (page - 1) * utils.PageSize
 
 	//Build query
 	queryMods := []qm.QueryMod{}
@@ -30,7 +30,7 @@ func GetAdminProductTypes(c *fiber.Ctx) error {
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
-	totalPage := int(math.Ceil(float64(totalTypes) / float64(6)))
+	offset,totalPage := utils.Paginate(page,utils.PageSize,int(totalTypes))
 
 	//get paginated product types
 	queryMods = append(queryMods, qm.OrderBy("\"productTypeID\" DESC"), qm.Limit(6), qm.Offset(offset))
@@ -69,12 +69,9 @@ func GetAdminProductTypeDetail(c *fiber.Ctx) error {
 		return service.SendError(c, 400, "Did not receive typeID")
 	}
 
-	pt, err := models.ProductTypes(qm.Where("\"productTypeID\" = ?", typeID)).One(c.Context(), boil.GetContextDB())
+	pt, err := models.FindProductType(c.Context(), boil.GetContextDB(),typeID);
 	if err != nil {
-		if errors.Is(err,sql.ErrNoRows){
-			return service.SendError(c,404,"Product type not found!");
-		}
-		return service.SendError(c, 500, err.Error())
+		return service.SendError(c, 500, "Product type not found!")
 	}
 
 	resp := fiber.Map{
@@ -89,11 +86,11 @@ func GetAdminProductTypeDetail(c *fiber.Ctx) error {
 func AdminProductTypeCreate(c *fiber.Ctx,) error {
 	var pt models.ProductType
 	if err := c.BodyParser(&pt); err != nil {
-		return service.SendError(c, 400, "Invalid body")
+		return service.SendError(c, 400, "Invalid request body")
 	}
 
 	//Field validation
-	if valid, errObj := validationProductType(c,&pt); !valid {
+	if valid, errObj := validationProductType(c.Context(),&pt); !valid {
 		return service.SendErrorStruct(c, 400, errObj)
 	}
 
@@ -114,28 +111,37 @@ func AdminProductTypeCreate(c *fiber.Ctx,) error {
 func AdminProductTypeUpdate(c *fiber.Ctx) error {
 	var pt models.ProductType
 	if err := c.BodyParser(&pt); err != nil {
-		return service.SendError(c, 400, "Invalid body")
+		return service.SendError(c, 400, "Invalid request body")
 	}
 
 	//Field validation
-	if valid, errObj := validationProductType(c,&pt); !valid {
-		return service.SendErrorStruct(c, 500, errObj)
+	if valid, errObj := validationProductType(c.Context(),&pt); !valid {
+		return service.SendErrorStruct(c, 400, errObj)
 	}
+
+	//Check if exists
+	toUpdate, err := models.FindProductType(c.Context(),boil.GetContextDB(),pt.ProductTypeID);
+	if err != nil{
+		return service.SendError(c,500,"Product type not found!")
+	}
+
 	//Update
-	if _, err := pt.Update(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
+	toUpdate.Status = pt.Status
+	toUpdate.TypeName = pt.TypeName
+	if _, err := toUpdate.Update(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
 
 	resp := fiber.Map{
 		"status":  "Success",
-		"data":    pt,
+		"data":    toUpdate,
 		"message": "Successfully updated product type",
 	}
 
 	return c.JSON(resp)
 }
 
-func validationProductType(c *fiber.Ctx,pt *models.ProductType) (bool, dto.ProductTypeError) {
+func validationProductType(ctx context.Context,pt *models.ProductType) (bool, dto.ProductTypeError) {
 	var errObj dto.ProductTypeError
 	if pt.TypeName == "" {
 		errObj.ErrTypeName = "Please input product type!"
@@ -144,7 +150,7 @@ func validationProductType(c *fiber.Ctx,pt *models.ProductType) (bool, dto.Produ
 	//Check duplicate name
 	exists, err := models.ProductTypes(
 		qm.Where("\"typeName\" = ? AND \"productTypeID\" <> ?",pt.TypeName,pt.ProductTypeID),
-	).Exists(c.Context(),boil.GetContextDB());
+	).Exists(ctx,boil.GetContextDB());
 	if err != nil{
 		errObj.ErrTypeName = "Validation failed, please try again"
 		return false, errObj

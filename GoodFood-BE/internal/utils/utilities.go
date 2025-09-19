@@ -124,6 +124,9 @@ func SetCache(key string, value any, ttl time.Duration, setKey string){
 }
 
 func ClearCache(setKeys ...string){
+	if redisdatabase.Client == nil {
+        return
+    }
 	for _,setKey := range setKeys{
 		keys, _ := redisdatabase.Client.SMembers(redisdatabase.Ctx,setKey).Result()
 		if len(keys) > 0{
