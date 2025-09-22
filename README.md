@@ -56,17 +56,14 @@ GoodFood-BE/
 ---
 
 ## ⚙️ Getting Started
-Prerequisites
-Go 1.22+
+## Prerequisites
+* Go 1.22+
+* PostgreSQL 15+
+* Redis 7+
+* Docker (optional)
 
-PostgreSQL 15+
-
-Redis 7+
-
-Docker (optional)
-
-Installation
-bash
+## Installation
+```bash
 Copy code
 # Clone the repository
 git clone https://github.com/dquang0504/GoodFood-BE.git
@@ -74,8 +71,11 @@ cd GoodFood-BE
 
 # Install dependencies
 go mod tidy
-Running Locally
-bash
+```
+---
+
+## Running Locally
+```bash
 Copy code
 # Start PostgreSQL & Redis via docker-compose
 docker-compose up -d
@@ -85,6 +85,8 @@ go run cmd/migrate/main.go
 
 # Start the backend server
 go run cmd/server/main.go
+```
+
 The server will be available at:
 👉 http://localhost:8080
 
@@ -92,7 +94,7 @@ The server will be available at:
 
 ## 🔑 Environment Variables
 Create a .env file in the root directory:
-
+```bash
 env
 Copy code
 DB_HOST=localhost
@@ -109,7 +111,11 @@ PAYPAL_CLIENT_ID=your_paypal_client_id
 PAYPAL_SECRET=your_paypal_secret
 
 JWT_SECRET=your_jwt_secret
-📖 API Documentation
+```
+
+---
+
+## 📖 API Documentation
 Swagger docs available at /swagger/index.html
 
 Example Postman collection: GoodFood API Docs
