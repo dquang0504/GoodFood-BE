@@ -1,9 +1,10 @@
-# GoodFood-BE 🍔🗄️
-[![Go Version](https://img.shields.io/badge/Go-1.24-blue)](https://golang.org/)
+# GoodFood Backend 🍔
+
+[![Go Version](https://img.shields.io/badge/Go-1.22-blue)](https://golang.org/)
 [![Postgres](https://img.shields.io/badge/Postgres-15-blue)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://www.docker.com/)
 
-Backend service for **GoodFood**, an e-commerce platform specialized in food ordering.  
+Backend service for **GoodFood**, an e-commerce website tailored for individual restaurant use and specialized in food ordering.  
 This repository handles the **core business logic, database management, and API services** for the GoodFood ecosystem.
 
 ---
@@ -17,48 +18,53 @@ This repository handles the **core business logic, database management, and API 
   - Product listing & details
   - Review analytics
 - Admin dashboard APIs for product and order analytics
+- Real-time notifications with **WebSocket**
+- TensorFlow integration for recommendation & analytics
 - Dockerized deployment for portability & maintainability
 
 ---
 
 ## 🛠️ Tech Stack
 - **Language:** Go (Golang)
-- **Frameworks & Tools:** Gin, SQLBoiler, GORM (if any)
+- **Frameworks & Tools:** Gin, Fiber, Resty
 - **Database:** PostgreSQL
+- **ORM / DB Tools:** SQLBoiler
 - **Cache:** Redis
 - **Payments:** VNPAY, PayPal
+- **Auth:** JWT, OAuth 2.0
+- **Realtime:** WebSocket
+- **Machine Learning:** TensorFlow
 - **Deployment:** Docker, AWS EC2
+- **API:** REST API
 
 ---
 
 ## 📂 Project Structure
-GoodFood-BE/
-│── cmd/ # Application entrypoints
-│── internal/ # Core business logic
-│ ├── server/ # HTTP handlers & routes
-│ ├── models/ # SQLBoiler models
-│ └── services/ # Business services
-│── configs/ # Config & environment files
-│── migrations/ # Database migrations
-│── Dockerfile
-│── docker-compose.yml
-│── README.md
-
-yaml
-Copy code
-
----
-
-## ⚙️ Getting Started
-
-### Prerequisites
-- Go 1.22+
-- PostgreSQL 15+
-- Redis 7+
-- Docker (optional)
-
-### Installation
 ```bash
+GoodFood-BE/
+├── cmd/              # Application entrypoints
+├── internal/         # Core business logic
+│   ├── server/       # HTTP handlers & routes
+│   ├── models/       # SQLBoiler models
+│   └── services/     # Business services
+├── configs/          # Config & environment files
+├── migrations/       # Database migrations
+├── Dockerfile
+├── docker-compose.yml
+└── README.md
+⚙️ Getting Started
+Prerequisites
+Go 1.22+
+
+PostgreSQL 15+
+
+Redis 7+
+
+Docker (optional)
+
+Installation
+bash
+Copy code
 # Clone the repository
 git clone https://github.com/dquang0504/GoodFood-BE.git
 cd GoodFood-BE
@@ -125,8 +131,3 @@ Please follow Go best practices.
 
 📜 License
 Distributed under the MIT License. See LICENSE for more information.
-
-yaml
-Copy code
-
----
