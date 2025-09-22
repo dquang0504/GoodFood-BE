@@ -1,16 +1,20 @@
-# GoodFood Backend 🍔
+# GoodFood Backend 🍔⚙️
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/dquang0504/GoodFood-BE/main/docs/assets/banner.png" alt="GoodFood Banner" width="100%" />
+  <img src="https://raw.githubusercontent.com/dquang0504/GoodFood-BE/main/GoodFood-BE/assets/GoodFood24h_logo.png" alt="GoodFood Banner" width="450" />
 </p>
 
-<h1 align="center">GoodFood Backend 🍔</h1>
+<h3 align="center">
+  <i>Backend infrastructure for smarter, faster, and secure online food ordering</i>
+</h3>
 
 <p align="center">
-  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.22-blue" /></a>
+  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.24-blue" /></a>
   <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/Postgres-15-blue" /></a>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-ready-blue" /></a>
-  <a href="https://github.com/dquang0504/GoodFood-BE/actions"><img src="https://github.com/dquang0504/GoodFood-BE/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/dquang0504/GoodFood-BE/actions">
+    <img src="https://github.com/dquang0504/GoodFood-BE/actions/workflows/go-ci.yml/badge.svg" alt="CI Status"/>
+  </a>
   <a href="https://codecov.io/gh/dquang0504/GoodFood-BE"><img src="https://img.shields.io/codecov/c/github/dquang0504/GoodFood-BE" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" /></a>
 </p>
@@ -44,7 +48,6 @@ This repository handles the **core business logic, database management, and API 
 - **Payments:** VNPAY, PayPal
 - **Auth:** JWT, OAuth 2.0
 - **Realtime:** WebSocket
-- **Machine Learning:** TensorFlow
 - **Deployment:** Docker, AWS EC2
 - **API:** REST API
 
@@ -75,7 +78,6 @@ GoodFood-BE/
 
 ## Installation
 ```bash
-Copy code
 # Clone the repository
 git clone https://github.com/dquang0504/GoodFood-BE.git
 cd GoodFood-BE
@@ -87,7 +89,6 @@ go mod tidy
 
 ## Running Locally
 ```bash
-Copy code
 # Start PostgreSQL & Redis via docker-compose
 docker-compose up -d
 
@@ -106,8 +107,6 @@ The server will be available at:
 ## 🔑 Environment Variables
 Create a .env file in the root directory:
 ```bash
-env
-Copy code
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
@@ -133,7 +132,7 @@ Example Postman collection: GoodFood API Docs
 
 ---
 
-##🚀 Deployment
+## 🚀 Deployment
 Dockerfile and docker-compose.yml included.
 
 CI/CD via GitHub Actions (to be added).
