@@ -1,8 +1,19 @@
 # GoodFood Backend 🍔
 
-[![Go Version](https://img.shields.io/badge/Go-1.22-blue)](https://golang.org/)
-[![Postgres](https://img.shields.io/badge/Postgres-15-blue)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://www.docker.com/)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dquang0504/GoodFood-BE/main/docs/assets/banner.png" alt="GoodFood Banner" width="100%" />
+</p>
+
+<h1 align="center">GoodFood Backend 🍔</h1>
+
+<p align="center">
+  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.22-blue" /></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/Postgres-15-blue" /></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-ready-blue" /></a>
+  <a href="https://github.com/dquang0504/GoodFood-BE/actions"><img src="https://github.com/dquang0504/GoodFood-BE/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://codecov.io/gh/dquang0504/GoodFood-BE"><img src="https://img.shields.io/codecov/c/github/dquang0504/GoodFood-BE" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" /></a>
+</p>
 
 Backend service for **GoodFood**, an e-commerce website tailored for individual restaurant use and specialized in food ordering.  
 This repository handles the **core business logic, database management, and API services** for the GoodFood ecosystem.
