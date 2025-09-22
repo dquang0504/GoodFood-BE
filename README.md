@@ -52,7 +52,7 @@ GoodFood-BE/
 ├── Dockerfile
 ├── docker-compose.yml
 └── README.md
-
+```
 ---
 
 ## ⚙️ Getting Started
