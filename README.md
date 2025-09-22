@@ -52,7 +52,10 @@ GoodFood-BE/
 ├── Dockerfile
 ├── docker-compose.yml
 └── README.md
-⚙️ Getting Started
+
+---
+
+## ⚙️ Getting Started
 Prerequisites
 Go 1.22+
 
@@ -85,7 +88,9 @@ go run cmd/server/main.go
 The server will be available at:
 👉 http://localhost:8080
 
-🔑 Environment Variables
+---
+
+## 🔑 Environment Variables
 Create a .env file in the root directory:
 
 env
@@ -109,14 +114,18 @@ Swagger docs available at /swagger/index.html
 
 Example Postman collection: GoodFood API Docs
 
-🚀 Deployment
+---
+
+##🚀 Deployment
 Dockerfile and docker-compose.yml included.
 
 CI/CD via GitHub Actions (to be added).
 
 AWS EC2 setup guide in docs/deployment.md.
 
-🤝 Contributing
+---
+
+## 🤝 Contributing
 We welcome contributions!
 
 Fork the repo
@@ -129,5 +138,7 @@ Push branch & open a PR
 
 Please follow Go best practices.
 
-📜 License
+---
+
+## 📜 License
 Distributed under the MIT License. See LICENSE for more information.
