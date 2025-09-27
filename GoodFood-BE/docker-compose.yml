@@ -1,15 +1,44 @@
 services:
+  backend:
+    build: .
+    container_name: goodfood-be
+    depends_on:
+      - psql_bp
+    environment:
+      GOODFOOD_DB_HOST: goodfood.chyaq2coo8s2.us-east-2.rds.amazonaws.com
+      GOODFOOD_DB_PORT: 5432
+      GOODFOOD_DB_USERNAME: ${GOODFOOD_DB_USERNAME}
+      GOODFOOD_DB_PASSWORD: Landautien123.
+      GOODFOOD_DB_DATABASE: goodfood
+      GOODFOOD_DB_SCHEMA: public
+      PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT}
+    ports:
+      - "8080:8080" # expose API port
+
   psql_bp:
     image: postgres:latest
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${BLUEPRINT_DB_DATABASE}
-      POSTGRES_USER: ${BLUEPRINT_DB_USERNAME}
-      POSTGRES_PASSWORD: ${BLUEPRINT_DB_PASSWORD}
+      POSTGRES_DB: ${GOODFOOD_DB_DATABASE}
+      POSTGRES_USER: ${GOODFOOD_DB_USERNAME}
+      POSTGRES_PASSWORD: ${GOODFOOD_DB_PASSWORD}
     ports:
-      - "${BLUEPRINT_DB_PORT}:5432"
+      - "5433:5432"
     volumes:
       - psql_volume_bp:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GOODFOOD_DB_USERNAME} -d ${GOODFOOD_DB_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
 
 volumes:
   psql_volume_bp:

@@ -20,7 +20,7 @@ func GetFour(c *fiber.Ctx) error {
 	// Fetch 4 products to display at Home.tsx
 	products, err := models.Products(qm.Where("status = true"),qm.Limit(4), qm.Load(models.ProductRels.ProductTypeIDProductType)).All(c.Context(), boil.GetContextDB())
 	if err != nil {
-		return service.SendError(c,500,"Failed to fetch products")
+		return service.SendError(c,500,err.Error())
 	}
 
 	//Build response

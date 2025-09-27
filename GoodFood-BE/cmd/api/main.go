@@ -58,16 +58,12 @@ func gracefulShutdown(fiberServer *server.FiberServer, dbService database.Servic
 	done <- true
 }
 
-var ctx = context.Background()
-
 func main() {
 	//Initialize database connection
 	dbService := database.New()
 	if boil.GetContextDB() == nil {
     	log.Fatal("boil.GetContextDB() is nil after database.New()")
 	}
-	fmt.Println(boil.GetContextDB())
-	fmt.Println("wtf")
 	defer dbService.Close()
 
 	//Check database health
@@ -93,6 +89,9 @@ func main() {
 	//Start a fiber server in a goroutine
 	go func() {
 		port, _ := strconv.Atoi(os.Getenv("PORT"))
+		if port == 0{
+			log.Fatalf("Error no port specified: %d",port)
+		}
 		err := server.Listen(fmt.Sprintf(":%d", port))
 		if err != nil {
 			panic(fmt.Sprintf("http server error: %s", err))

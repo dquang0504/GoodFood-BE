@@ -14,29 +14,33 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-//GetAdminReview fetches paginated list of reviews from DB, also sending the list over to microservice flask for sentiment analysis then cache into redis.
-//Returns the paginated list along with sentiment analysis results.
-func GetAdminReview(c *fiber.Ctx) error{
+// GetAdminReview fetches paginated list of reviews from DB, also sending the list over to microservice flask for sentiment analysis then cache into redis.
+// Returns the paginated list along with sentiment analysis results.
+func GetAdminReview(c *fiber.Ctx) error {
 
 	//Fetch & parse query params
-	page := c.QueryInt("page",0);
-	if page == 0{
-		return service.SendError(c,401,"Did not receive page");
+	page := c.QueryInt("page", 0)
+	if page == 0 {
+		return service.SendError(c, 400, "Did not receive page")
 	}
-	sort := c.Query("sort","Product Name");
-	search := c.Query("search","");
-	offset := (page-1) * utils.PageSize;
-	dateFrom, dateTo, err := utils.ParseDateRange(c.Query("dateFrom", ""), c.Query("dateTo", ""));
-	if err != nil{
-		return service.SendError(c,400,err.Error());
+	sort := c.Query("sort", "Product Name")
+	search := c.Query("search", "")
+	offset := (page - 1) * utils.PageSize
+	dateFrom, dateTo, err := utils.ParseDateRange(c.Query("dateFrom", ""), c.Query("dateTo", ""))
+	if err != nil {
+		return service.SendError(c, 400, err.Error())
 	}
 
 	//Redis cache
-	redisKey := fmt.Sprintf("review:list:page=%d:sort=%s:search=%s:ngayFrom=%s:ngayTo=%s",page,sort,search,dateFrom,dateTo)
+	redisKey := fmt.Sprintf("review:list:page=%d:sort=%s:search=%s:ngayFrom=%s:ngayTo=%s", page, sort, search, dateFrom, dateTo)
 	//Fetch redis key
 	cachedReview := fiber.Map{}
-	if ok,_ := utils.GetCache(redisKey,&cachedReview); ok{
+	ok, err := utils.GetCache(redisKey, &cachedReview)
+	if ok {
 		return c.JSON(cachedReview)
+	}
+	if err != nil {
+		return service.SendError(c,500,err.Error())
 	}
 
 	// Fetch cards
@@ -44,7 +48,7 @@ func GetAdminReview(c *fiber.Ctx) error{
 			   COUNT(CASE WHEN stars = 5 THEN 1 END) AS total_5s
 		FROM review
 	`
-	cards, err := utils.FetchCards(c,query,&dto.ReviewCards{})
+	cards, err := utils.FetchCards(c, query, &dto.ReviewCards{})
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
@@ -56,16 +60,16 @@ func GetAdminReview(c *fiber.Ctx) error{
 	}
 
 	//Count & paginate
-	totalReviews, err := models.Reviews(queryMods...).Count(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	totalReviews, err := models.Reviews(queryMods...).Count(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	totalPage := int(math.Ceil(float64(totalReviews)/6))
+	totalPage := int(math.Ceil(float64(totalReviews) / 6))
 
-	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset), qm.OrderBy("\"reviewID\" DESC"),qm.Load(models.ReviewRels.AccountIDAccount), qm.Load(models.ReviewRels.ProductIDProduct))
-	reviews, err := models.Reviews(queryMods...).All(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500, err.Error());
+	queryMods = append(queryMods, qm.Limit(6), qm.Offset(offset), qm.OrderBy("\"reviewID\" DESC"), qm.Load(models.ReviewRels.AccountIDAccount), qm.Load(models.ReviewRels.ProductIDProduct))
+	reviews, err := models.Reviews(queryMods...).All(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	//Analyze reviews
@@ -81,50 +85,50 @@ func GetAdminReview(c *fiber.Ctx) error{
 	}
 
 	//Build response
-	response := make([]dto.ReviewResponse,len(reviews));
-	for i, r := range reviews{
+	response := make([]dto.ReviewResponse, len(reviews))
+	for i, r := range reviews {
 		response[i] = dto.ReviewResponse{
-			Review: *r,
+			Review:        *r,
 			ReviewAccount: *r.R.AccountIDAccount,
 			ReviewProduct: *r.R.ProductIDProduct,
 		}
 	}
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": response,
-		"result": analysisResult,
-		"cards": cards,
-		"totalPage": totalPage, 
-		"message": "Successfully fetched review values!",
+		"status":    "Success",
+		"data":      response,
+		"result":    analysisResult,
+		"cards":     cards,
+		"totalPage": totalPage,
+		"message":   "Successfully fetched review values!",
 	}
 
 	//Cache response
-	utils.SetCache(redisKey,resp,10*24*time.Hour,"");
+	utils.SetCache(redisKey, resp, 10*24*time.Hour, "")
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-func GetAdminReviewAnalysis(c *fiber.Ctx) error{
+func GetAdminReviewAnalysis(c *fiber.Ctx) error {
 	//Fetch query params
-	page := c.QueryInt("page",0);
-	if page == 0{
-		return service.SendError(c,401,"Did not receive page");
+	page := c.QueryInt("page", 0)
+	if page == 0 {
+		return service.SendError(c, 401, "Did not receive page")
 	}
-	sort := c.Query("sort","Positive Sentiment");
+	sort := c.Query("sort", "Positive Sentiment")
 
 	//Redis cache
-	redisKey := fmt.Sprintf("reviewAnalysis:list:page=%d:sort=%s",page,sort)
+	redisKey := fmt.Sprintf("reviewAnalysis:list:page=%d:sort=%s", page, sort)
 	//Fetch redis key
 	cachedReviewAnalysis := fiber.Map{}
-	if ok, _ := utils.GetCache(redisKey,&cachedReviewAnalysis); ok{
+	if ok, _ := utils.GetCache(redisKey, &cachedReviewAnalysis); ok {
 		return c.JSON(cachedReviewAnalysis)
 	}
 
 	//Fetch all reviews to send to python to analyze
-	reviews, err := models.Reviews().All(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error())
+	reviews, err := models.Reviews().All(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	//Send review list to python backend for sentiment analysis
@@ -142,64 +146,64 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error{
 	sortingResult := []dto.AnalyzeResult{}
 
 	//Sentiment filter
-	switch sort{
-		case "Positive Sentiment":
-			sortingResult = utils.AppendSortingResult(analysisResult,sort);
-		case "Negative Sentiment":
-			sortingResult = utils.AppendSortingResult(analysisResult,sort);
-		case "Neutral Sentiment":
-			sortingResult = utils.AppendSortingResult(analysisResult,sort);
-		case "Mixed Sentiment":
-			sortingResult = utils.AppendSortingResult(analysisResult,sort);
-		default:
-			fmt.Println("Do nothing in fallback")
+	switch sort {
+	case "Positive Sentiment":
+		sortingResult = utils.AppendSortingResult(analysisResult, sort)
+	case "Negative Sentiment":
+		sortingResult = utils.AppendSortingResult(analysisResult, sort)
+	case "Neutral Sentiment":
+		sortingResult = utils.AppendSortingResult(analysisResult, sort)
+	case "Mixed Sentiment":
+		sortingResult = utils.AppendSortingResult(analysisResult, sort)
+	default:
+		fmt.Println("Do nothing in fallback")
 	}
-	
+
 	//pagination
-	total := len(sortingResult);
-	totalPage := int(math.Ceil(float64(total)/6))
+	total := len(sortingResult)
+	totalPage := int(math.Ceil(float64(total) / 6))
 
 	startIndex := (page - 1) * 6
 	endIndex := startIndex + 6
-	if endIndex > total{
+	if endIndex > total {
 		endIndex = total
 	}
 	pagedResult := sortingResult[startIndex:endIndex]
 
 	//Build response
 	resp := fiber.Map{
-		"status": "Success",
-		"result": pagedResult,
-		"page": page,
+		"status":    "Success",
+		"result":    pagedResult,
+		"page":      page,
 		"totalPage": totalPage,
-		"message": "Successfully fetched review values!",
+		"message":   "Successfully fetched review values!",
 	}
 
 	//Set cache
-	utils.SetCache(redisKey,resp,10 * 24 * time.Hour,"");
+	utils.SetCache(redisKey, resp, 10*24*time.Hour, "")
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-//GetAdminReviewDetail fetches the specified review and send it to microservice flask to analyze
-//Returns the review along with the sentiment analysis.
-func GetAdminReviewDetail(c *fiber.Ctx) error{
+// GetAdminReviewDetail fetches the specified review and send it to microservice flask to analyze
+// Returns the review along with the sentiment analysis.
+func GetAdminReviewDetail(c *fiber.Ctx) error {
 	//Fetch query param
-	reviewID := c.QueryInt("reviewID",0);
-	if reviewID == 0{
-		return service.SendError(c,400,"Did not receive reviewID");
+	reviewID := c.QueryInt("reviewID", 0)
+	if reviewID == 0 {
+		return service.SendError(c, 400, "Did not receive reviewID")
 	}
 
 	//Redis cache
-	redisKey := fmt.Sprintf("review:reviewID=%d:",reviewID);
+	redisKey := fmt.Sprintf("review:reviewID=%d:", reviewID)
 	//Fetch cache
 	cachedReview := fiber.Map{}
-	if ok, _ := utils.GetCache(redisKey,&cachedReview); ok{
+	if ok, _ := utils.GetCache(redisKey, &cachedReview); ok {
 		return c.JSON(cachedReview)
 	}
 
 	//Fetch data concurrently
-	review,reviewImages,reply,err := utils.FetchReviewData(c,reviewID);
+	review, reviewImages, reply, err := utils.FetchReviewData(c, reviewID)
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
@@ -215,69 +219,69 @@ func GetAdminReviewDetail(c *fiber.Ctx) error{
 
 	//Build response
 	response := fiber.Map{
-		"status": "Success",
-		"data": review,
+		"status":     "Success",
+		"data":       review,
 		"listHinhDG": reviewImages,
-		"reply": reply,
-		"result": analysisResult,
-		"message": "Successfully fetched review details!",
+		"reply":      reply,
+		"result":     analysisResult,
+		"message":    "Successfully fetched review details!",
 	}
 
 	//Cache response
-	utils.SetCache(redisKey,response,10*24*time.Hour,"")
+	utils.SetCache(redisKey, response, 10*24*time.Hour, "")
 
-	return c.JSON(response);
+	return c.JSON(response)
 }
 
-//InsertReviewReply inserts a reply to a specified review.
-//Returns the inserted reply
-func InsertReviewReply(c *fiber.Ctx) error{
+// InsertReviewReply inserts a reply to a specified review.
+// Returns the inserted reply
+func InsertReviewReply(c *fiber.Ctx) error {
 	var reply models.Reply
-	if err := c.BodyParser(&reply); err != nil{
-		return service.SendError(c,400,"Invalid body!");
+	if err := c.BodyParser(&reply); err != nil {
+		return service.SendError(c, 400, "Invalid body!")
 	}
 
-	if reply.IsReplied{
-		return service.SendError(c,500,"Already replied to this review!")
+	if reply.IsReplied {
+		return service.SendError(c, 500, "Already replied to this review!")
 	}
 
 	//setting isReplied to true
 	reply.IsReplied = true
-	if err := reply.Insert(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
-		return service.SendError(c,500,err.Error());
+	if err := reply.Insert(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": reply,
+		"status":  "Success",
+		"data":    reply,
 		"message": "Successfully replied to review!",
 	}
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }
 
-//UpdateReviewReply updates an existing reply
-//Returns the updated reply
-func UpdateReviewReply(c *fiber.Ctx) error{
+// UpdateReviewReply updates an existing reply
+// Returns the updated reply
+func UpdateReviewReply(c *fiber.Ctx) error {
 	var reply models.Reply
-	if err := c.BodyParser(&reply); err != nil{
-		return service.SendError(c,400,"Invalid body!");
+	if err := c.BodyParser(&reply); err != nil {
+		return service.SendError(c, 400, "Invalid body!")
 	}
 
-	replyID := c.QueryInt("replyID",0);
-	if replyID == 0{
-		return service.SendError(c,400,"Did not receive replyID");
+	replyID := c.QueryInt("replyID", 0)
+	if replyID == 0 {
+		return service.SendError(c, 400, "Did not receive replyID")
 	}
- 
-	if _,err := reply.Update(c.Context(),boil.GetContextDB(),boil.Infer()); err != nil{
-		return service.SendError(c,500,err.Error());
+
+	if _, err := reply.Update(c.Context(), boil.GetContextDB(), boil.Infer()); err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	resp := fiber.Map{
-		"status": "Success",
-		"data": reply,
+		"status":  "Success",
+		"data":    reply,
 		"message": "Successfully updated reply!",
 	}
 
-	return c.JSON(resp);
+	return c.JSON(resp)
 }

@@ -12,6 +12,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/aarondl/sqlboiler/v4/boil"
+	_ "github.com/lib/pq"
 )
 
 // Service interface represents a service that interacts with a database.
@@ -47,9 +48,9 @@ func New() Service {
         return dbInstance
     }
 	//connection string
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=%s", username, password, host, port, database, schema)
-	//connect to db
-	db, err := sql.Open("pgx", connStr)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require connect_timeout=30 search_path=%s",
+    	host, port, username, password, database, schema)	//connect to db
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}

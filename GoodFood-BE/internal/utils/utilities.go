@@ -21,6 +21,10 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/genai"
 	"gopkg.in/gomail.v2"
+	"cloud.google.com/go/aiplatform/apiv1"
+	aiplatformpb "google.golang.org/genproto/googleapis/cloud/aiplatform/v1"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func Paginate(page, pageSize, totalRecords int) (offset int,totalPage int){
@@ -323,6 +327,103 @@ func FunctionDeclaration() []*genai.FunctionDeclaration {
 	return functions
 }
 
+func CallVertexAIEndpoint(c *fiber.Ctx, prompt string) (string, error) {
+	ctx := c.Context()
+
+	project := os.Getenv("VERTEX_AI_PROJECT")
+	location := os.Getenv("VERTEX_AI_LOCATION")
+	modelOrEndpoint := os.Getenv("VERTEX_AI_MODEL")
+	if project == "" || location == "" || modelOrEndpoint == "" {
+		return "", fmt.Errorf("missing env: VERTEX_AI_PROJECT or VERTEX_AI_LOCATION or VERTEX_AI_MODEL")
+	}
+
+	// Normalize thành resource name "projects/.../locations/.../endpoints/ID"
+	var endpointResource string
+	if strings.Contains(modelOrEndpoint, "/endpoints/") && strings.HasPrefix(modelOrEndpoint, "projects/") {
+		endpointResource = modelOrEndpoint
+	} else if strings.Contains(modelOrEndpoint, ".prediction.vertexai.goog") {
+		// domain form: "<endpointID>.<location>-<project>.prediction.vertexai.goog"
+		parts := strings.Split(modelOrEndpoint, ".")
+		if len(parts) == 0 {
+			return "", fmt.Errorf("invalid endpoint domain: %s", modelOrEndpoint)
+		}
+		endpointID := parts[0]
+		endpointResource = fmt.Sprintf("projects/%s/locations/%s/endpoints/%s", project, location, endpointID)
+	} else if !strings.Contains(modelOrEndpoint, "/") {
+		// assume it's just the endpoint ID
+		endpointResource = fmt.Sprintf("projects/%s/locations/%s/endpoints/%s", project, location, modelOrEndpoint)
+	} else {
+		// Looks like a model resource (not an endpoint) => inform user
+		return "", fmt.Errorf("VERTEX_AI_MODEL looks like a model resource (not an endpoint). For a dedicated endpoint call you must set VERTEX_AI_MODEL to an endpoint resource like 'projects/%s/locations/%s/endpoints/<ID>' or endpoint ID",
+			project, location)
+	}
+
+	// Create Prediction client (official)
+	predClient, err := aiplatform.NewPredictionClient(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to create Prediction client: %w", err)
+	}
+	defer predClient.Close()
+
+	// Build instance(s). Many text models accept {"content": "<text>"}; nếu model của bạn khác shape,
+	// hãy điều chỉnh map bên dưới cho phù hợp.
+	instStruct, err := structpb.NewStruct(map[string]interface{}{
+		"content": prompt,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create instance struct: %w", err)
+	}
+
+	req := &aiplatformpb.PredictRequest{
+		Endpoint: endpointResource,
+		Instances: []*structpb.Value{
+			structpb.NewStructValue(instStruct),
+		},
+		// Parameters can be added if your model expects them:
+		// Parameters: structpb.NewStructValue(...),
+	}
+
+	resp, err := predClient.Predict(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("prediction error: %w", err)
+	}
+
+	if len(resp.GetPredictions()) == 0 {
+		return "", fmt.Errorf("no predictions returned")
+	}
+
+	// Try to extract a text response robustly:
+	first := resp.GetPredictions()[0]
+	if s := first.GetStringValue(); s != "" {
+		return s, nil
+	}
+	if sv := first.GetStructValue(); sv != nil {
+		// Common shapes:
+		// 1) {"content":"<text>"}
+		// 2) {"candidates":[{"content":"..."}, ...]}
+		if f, ok := sv.Fields["content"]; ok {
+			if txt := f.GetStringValue(); txt != "" {
+				return txt, nil
+			}
+		}
+		if cands, ok := sv.Fields["candidates"]; ok {
+			if list := cands.GetListValue(); list != nil && len(list.Values) > 0 {
+				if firstCand := list.Values[0].GetStructValue(); firstCand != nil {
+					if v, ok := firstCand.Fields["content"]; ok {
+						if txt := v.GetStringValue(); txt != "" {
+							return txt, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: marshal first prediction to JSON string
+	b, _ := protojson.Marshal(first)
+	return string(b), nil
+}
+
 func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.GenerateContentResponse, error){
 	client, err := genai.NewClient(c.Context(), &genai.ClientConfig{
 		Project:  os.Getenv("VERTEX_AI_PROJECT"),
@@ -364,6 +465,7 @@ func CallVertexAI(prompt string,c *fiber.Ctx, withFunction bool) (*genai.Generat
 		config,
 	)
 	if err != nil {
+		fmt.Println(err.Error())
 		return nil,service.SendError(c, 500, "Failed to generate content: "+err.Error())
 	}
 

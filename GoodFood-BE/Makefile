@@ -1,28 +1,26 @@
-# Simple Makefile for a Go project
-
-# Build the application
-all: build test
-
+# Build Go binaries
 build-api:
 	@echo "Building..."
 	@go build -o main cmd/api/main.go
-
-# Run the application
-run-api:
-	@go run cmd/api/main.go
 
 build-worker:
 	@echo "Building..."
 	@go build -o worker cmd/worker/main.go
 
-# Run the worker
+# Run locally
+run-api:
+	@go run cmd/api/main.go
+
 run-worker:
 	@go run cmd/worker/main.go
-# Create DB container
+
+# Docker commands
+docker-build:
+    @docker build -t goodfood-be:latest
+
 docker-run:
 	@docker compose up --build
 
-# Shutdown DB container
 docker-down:
 	@docker compose down
 
@@ -48,4 +46,4 @@ watch:
 	fi; \
 	air
 
-.PHONY: all build run test clean watch docker-run docker-down itest
+.PHONY: build run test clean watch docker-run docker-down itest

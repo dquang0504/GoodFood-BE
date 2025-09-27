@@ -20,7 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-//CallVertexAI uses Vertex AI function calling to analyze prompt and execute one of the below functions
+// CallVertexAI uses Vertex AI function calling to analyze prompt and execute one of the below functions
 func CallVertexAI(c *fiber.Ctx) error {
 	var body dto.PromptRequest
 	if err := c.BodyParser(&body); err != nil {
@@ -31,50 +31,58 @@ func CallVertexAI(c *fiber.Ctx) error {
 		return service.SendError(c, 400, "Prompt cannot be empty")
 	}
 
-	res,err := utils.CallVertexAI(body.Prompt,c,true);
+	res, err := utils.CallVertexAI(body.Prompt, c, true)
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
 
+	fmt.Println(res)
+
 	// If the model called a function
-	if len(res.Candidates) > 0 && res.Candidates[0].Content != nil{
-		for _, part := range res.Candidates[0].Content.Parts {
-			if part.FunctionCall != nil {
-				// The model decided to call a function
-				call := part.FunctionCall
-				switch(call.Name){
+	if res != nil && len(res.Candidates) > 0 && res.Candidates[0] != nil {
+		content := res.Candidates[0].Content
+		if content != nil && len(content.Parts) > 0 {
+			for _, part := range content.Parts {
+				if part.FunctionCall != nil {
+					call := part.FunctionCall
+					if call.Args == nil {
+						return service.SendError(c, 400, "Function call args is nil")
+					}
+					switch call.Name {
 					case "get_order_status":
 						orderIDStr := fmt.Sprintf("%v", call.Args["order_id"])
 						orderID, err := strconv.Atoi(orderIDStr)
 						if err != nil {
 							return service.SendError(c, 400, "Invalid order_id in function call")
 						}
-						return get_order_status(c,orderID)
+						return get_order_status(c, orderID)
 					case "get_top_product":
-						return get_top_product(c);
+						return get_top_product(c)
 					case "place_order":
-						// Parse products
-						productsAny := call.Args["products"]
+						productsAny, ok := call.Args["products"]
+						if !ok {
+							return service.SendError(c, 400, "Missing products in function call")
+						}
 						products, ok := productsAny.([]interface{})
 						if !ok {
-							return service.SendError(c, 400, "Invalid products format.")
+							return service.SendError(c, 400, "Invalid products format")
 						}
 						var parsedProducts []map[string]interface{}
 						for _, p := range products {
 							m, ok := p.(map[string]interface{})
 							if !ok {
-								return service.SendError(c, 400, "Invalid product item format.")
+								return service.SendError(c, 400, "Invalid product item format")
 							}
 							parsedProducts = append(parsedProducts, m)
 						}
-						// Parse payment_method
 						paymentMethod, ok := call.Args["payment_method"].(string)
 						if !ok {
-							return service.SendError(c, 400, "Invalid payment_method.")
+							return service.SendError(c, 400, "Invalid payment_method")
 						}
-						return place_order(c,parsedProducts,paymentMethod);
+						return place_order(c, parsedProducts, paymentMethod)
 					default:
-						break;
+						fmt.Println("Unknown function:", call.Name)
+					}
 				}
 			}
 		}
@@ -82,12 +90,25 @@ func CallVertexAI(c *fiber.Ctx) error {
 
 	// Otherwise, return normal text
 	result := ""
-	for _, candidate := range res.Candidates {
-		for _, part := range candidate.Content.Parts {
-			if part.Text != "" {
-				result += part.Text
+	if res != nil {
+		for _, candidate := range res.Candidates {
+			if candidate == nil || candidate.Content == nil {
+				continue
+			}
+			if len(candidate.Content.Parts) == 0 {
+				continue
+			}
+			for _, part := range candidate.Content.Parts {
+				if part != nil && part.Text != "" {
+					result += part.Text
+				}
 			}
 		}
+	}
+
+	if result == "" {
+		// Trả message fallback để tránh panic và dễ debug
+		return service.SendError(c, 500, "Vertex AI returned empty or invalid response")
 	}
 
 	return c.JSON(fiber.Map{
@@ -97,26 +118,26 @@ func CallVertexAI(c *fiber.Ctx) error {
 	})
 }
 
-//get_order_status fetches the designated invoice status and return it to the user.
-func get_order_status (c *fiber.Ctx, orderID int) error{
+// get_order_status fetches the designated invoice status and return it to the user.
+func get_order_status(c *fiber.Ctx, orderID int) error {
 
 	//Fetch the currently logged in user
 	username := auth.GetAuthenticatedUser(c)
 	if username == "" {
 		return service.SendError(c, 401, "User not authenticated")
 	}
-	account, err := models.Accounts(qm.Where("username = ?",username)).One(c.Context(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	account, err := models.Accounts(qm.Where("username = ?", username)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	//Fetch the order
-	order, err := models.Invoices(qm.Where("\"invoiceID\" = ? AND \"accountID\" = ?",orderID,account.AccountID)).One(c.Context(),boil.GetContextDB())
-	if err != nil{
-		if errors.Is(err,sql.ErrNoRows){
-			resp, err := utils.GiveAnswerForUnreachableData("user asked for the status of an order, but the order does not exist in the database or it's not THEIR order",c)
-			if err != nil{
-				return service.SendError(c,500,err.Error());
+	order, err := models.Invoices(qm.Where("\"invoiceID\" = ? AND \"accountID\" = ?", orderID, account.AccountID)).One(c.Context(), boil.GetContextDB())
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			resp, err := utils.GiveAnswerForUnreachableData("user asked for the status of an order, but the order does not exist in the database or it's not THEIR order", c)
+			if err != nil {
+				return service.SendError(c, 500, err.Error())
 			}
 			return c.JSON(fiber.Map{
 				"status":  "Success",
@@ -124,16 +145,16 @@ func get_order_status (c *fiber.Ctx, orderID int) error{
 				"message": "Fine-tuned model response OK",
 			})
 		}
-		return service.SendError(c,500,err.Error());
+		return service.SendError(c, 500, err.Error())
 	}
-	
+
 	//If found the order, fetch the order status.
-	orderStatus, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?",order.InvoiceStatusID)).One(context.Background(),boil.GetContextDB());
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	orderStatus, err := models.InvoiceStatuses(qm.Where("\"invoiceStatusID\" = ?", order.InvoiceStatusID)).One(context.Background(), boil.GetContextDB())
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	
-	result := fmt.Sprintf("The status of order %d is: %s",orderID,orderStatus.StatusName)
+
+	result := fmt.Sprintf("The status of order %d is: %s", orderID, orderStatus.StatusName)
 
 	return c.JSON(fiber.Map{
 		"status":  "Success",
@@ -142,9 +163,8 @@ func get_order_status (c *fiber.Ctx, orderID int) error{
 	})
 }
 
-
-//get_top_product returns to the user the product with the most sales.
-func get_top_product (c *fiber.Ctx) error{
+// get_top_product returns to the user the product with the most sales.
+func get_top_product(c *fiber.Ctx) error {
 	var response dto.BestSellingProductResponse
 	err := queries.Raw(`
 		SELECT p."productID",
@@ -156,38 +176,37 @@ func get_top_product (c *fiber.Ctx) error{
 		GROUP BY p."productID",p."productName",p."coverImage"
 		ORDER BY total_quantity_sold DESC
 		LIMIT 1
-	`).Bind(c.Context(),boil.GetContextDB(),&response);
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	`).Bind(c.Context(), boil.GetContextDB(), &response)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	jsonBytes, err := json.Marshal(response);
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
-	res, err := utils.GiveStructuredAnswer("get_top_product",string(jsonBytes),c);
-	if err != nil{
-		return service.SendError(c,500,err.Error());
+	res, err := utils.GiveStructuredAnswer("get_top_product", string(jsonBytes), c)
+	if err != nil {
+		return service.SendError(c, 500, err.Error())
 	}
 
 	return c.JSON(fiber.Map{
-		"status":  "Success",
-		"data":    res,
-		"image": response.ProductImage,
+		"status":    "Success",
+		"data":      res,
+		"image":     response.ProductImage,
 		"productID": response.ProductID,
-		"message": "Fine-tuned model response OK",
+		"message":   "Fine-tuned model response OK",
 	})
 }
 
-
 // This function handles user order placement logic.
-// It validates authentication, retrieves user/address info, 
+// It validates authentication, retrieves user/address info,
 // fetches product details concurrently, and builds the cart.
 // Returns a JSON response with order summary or error message.
 func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod string) error {
 	var (
-		wg     sync.WaitGroup
-		mu     sync.Mutex
-		carts  []dto.CartDetailResponse
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		carts []dto.CartDetailResponse
 	)
 
 	//Validate authentication
@@ -267,13 +286,13 @@ func place_order(c *fiber.Ctx, products []map[string]interface{}, paymentMethod 
 	close(respChan)
 
 	//priority: if has resp from AI -> return resp
-	if resp, ok := <-respChan; ok{
+	if resp, ok := <-respChan; ok {
 		return c.JSON(resp)
 	}
 
 	//return err if there are any
-	for err := range errChan{
-		if err != nil{
+	for err := range errChan {
+		if err != nil {
 			return service.SendError(c, 500, err.Error())
 		}
 	}
