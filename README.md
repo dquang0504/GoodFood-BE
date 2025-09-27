@@ -1,7 +1,7 @@
 # GoodFood Backend 🍔⚙️
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/dquang0504/GoodFood-BE/main/GoodFood-BE/assets/GoodFood24h_logo.png" alt="GoodFood Banner" width="450" />
+  <img src="https://raw.githubusercontent.com/dquang0504/GoodFood-BE/main/GoodFood-BE/assets/GoodFood-BE-cover.png" alt="GoodFood Banner" width="450" />
 </p>
 
 <h3 align="center">
@@ -56,8 +56,15 @@ This repository handles the **core business logic, database management, and API 
 ## 📂 Project Structure
 ```bash
 GoodFood-BE/
+├── assets/           # Store media files
+├── bin/worker        # Worker file         
 ├── cmd/              # Application entrypoints
 ├── internal/         # Core business logic
+|   ├── auth/         # Middleware for authentication & authorization
+|   ├── database/     # Database connection initialization and clean up
+|   ├── dto/          # DTO
+|   ├── jobs/         # Async concurrent jobs (sending mails, processing images)
+|   ├── redis-database/      # Redis database connection
 │   ├── server/       # HTTP handlers & routes
 │   ├── models/       # SQLBoiler models
 │   └── services/     # Business services
@@ -128,14 +135,12 @@ JWT_SECRET=your_jwt_secret
 ## 📖 API Documentation
 Swagger docs available at /swagger/index.html
 
-Example Postman collection: GoodFood API Docs
-
 ---
 
 ## 🚀 Deployment
 Dockerfile and docker-compose.yml included.
 
-CI/CD via GitHub Actions (to be added).
+CI/CD via GitHub Actions.
 
 AWS EC2 setup guide in docs/deployment.md.
 
