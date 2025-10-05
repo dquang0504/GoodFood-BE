@@ -1,0 +1,29 @@
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+
+[build]
+  bin = "./worker"
+  cmd = "make build-worker" # gọi target build-worker trong Makefile
+  delay = 1000
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "node_modules"]
+  exclude_regex = ["_test.go"]
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  log = "build-errors.log"
+
+[color]
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  main_only = false
+  time = false
+
+[misc]
+  clean_on_exit = false
+
+[server]
+# Worker không expose HTTP nên không cần port
+bind = "0.0.0.0:0"

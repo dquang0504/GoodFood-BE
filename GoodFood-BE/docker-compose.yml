@@ -16,7 +16,16 @@ services:
       REDIS_PORT: ${REDIS_PORT}
     ports:
       - "8080:8080" # expose API port
-
+  
+  worker:
+    build: .
+    container_name: goodfood-worker
+    depends_on:
+      - redis
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT}
+    command: ["/app/worker"]
   psql_bp:
     image: postgres:latest
     restart: unless-stopped
@@ -39,6 +48,9 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
 
 volumes:
   psql_volume_bp:
+  redis_data:

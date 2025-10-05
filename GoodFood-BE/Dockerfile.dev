@@ -1,0 +1,17 @@
+# Stage 1: Build
+FROM golang:1.24.3 AS builder
+
+WORKDIR /app
+
+# Install air cli for live reloading
+RUN go install github.com/air-verse/air@v1.62.0
+
+# Install dependencies to utilize docker layer caching later
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy soure code
+COPY . .
+
+# Run with air (air.toml)
+CMD ["air"]

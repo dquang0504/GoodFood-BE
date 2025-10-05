@@ -24,10 +24,11 @@ func GetCartDetail(c *fiber.Ctx) error{
 	}
 
 	//Create redis key after accountID
-	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID);
+	redisKey := fmt.Sprintf("cart:accountID=%d",accountID);
 	//Fetch cache
 	cachedCart := fiber.Map{}
 	if ok, _ := utils.GetCache(redisKey,&cachedCart); ok{
+		fmt.Println(cachedCart);
 		return c.JSON(cachedCart)
 	}
 
@@ -50,7 +51,7 @@ func GetCartDetail(c *fiber.Ctx) error{
 	}
 
 	//Save into cache
-	utils.SetCache(redisKey,resp,10*time.Minute,"");
+	utils.SetCache(redisKey,resp,10*time.Minute,redisKey);
 
 	return c.JSON(resp)
 }
@@ -85,7 +86,7 @@ func Cart_ModifyQuantity(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	redisKey := fmt.Sprintf("cart:accountID=%d",accountID)
 	utils.ClearCache(redisKey);
 	
 	resp := fiber.Map{
@@ -120,7 +121,7 @@ func DeleteCartItem(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	redisKey := fmt.Sprintf("cart:accountID=%d",accountID)
 	utils.ClearCache(redisKey);
 
 	resp := fiber.Map{
@@ -139,7 +140,7 @@ func AddToCart(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	redisKey := fmt.Sprintf("cart:accountID=%d:",cartDetail.AccountID)
+	redisKey := fmt.Sprintf("cart:accountID=%d",cartDetail.AccountID)
 	utils.ClearCache(redisKey);
 
 	//Check if the product has already existed in the cart
@@ -240,7 +241,7 @@ func DeleteAllItems(c *fiber.Ctx) error{
 	}
 
 	//Clear cache after mutation
-	redisKey := fmt.Sprintf("cart:accountID=%d:",accountID)
+	redisKey := fmt.Sprintf("cart:accountID=%d",accountID)
 	utils.ClearCache(redisKey);
 
 	resp := fiber.Map{

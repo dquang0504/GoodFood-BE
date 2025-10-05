@@ -131,7 +131,9 @@ func ClearCache(setKeys ...string){
 	if redisdatabase.Client == nil {
         return
     }
+	fmt.Println("clearCache ran...")
 	for _,setKey := range setKeys{
+		_ = redisdatabase.Client.Del(redisdatabase.Ctx, setKey).Err()
 		keys, _ := redisdatabase.Client.SMembers(redisdatabase.Ctx,setKey).Result()
 		if len(keys) > 0{
 			_ = redisdatabase.Client.Del(redisdatabase.Ctx,keys...).Err()

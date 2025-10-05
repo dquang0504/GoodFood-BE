@@ -4,7 +4,6 @@ import (
 	"GoodFood-BE/internal/dto"
 	redisdatabase "GoodFood-BE/internal/redis-database"
 	"GoodFood-BE/models"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -109,7 +108,7 @@ func ClearRedisByPattern(pattern string){
 	}
 }
 
-func GetProductsUtil(c *fiber.Ctx, search, typeName, orderBy string, page, minPrice, maxPrice int) (models.ProductSlice, int,string, error){
+func GetProductsUtil(c *fiber.Ctx, search, typeName, orderBy string, page, minPrice, maxPrice int) (models.ProductSlice, int, error){
 	//Initialize queryMods
 	queryMods := []qm.QueryMod{
 		qm.Where("status = true"),
@@ -123,7 +122,7 @@ func GetProductsUtil(c *fiber.Ctx, search, typeName, orderBy string, page, minPr
 	if typeName != ""{
 		productType,err := models.ProductTypes(qm.Where("\"typeName\" = ?",typeName)).One(c.Context(),boil.GetContextDB())
 		if err != nil {
-			return nil, 0, "",fmt.Errorf("product type not found")
+			return nil, 0,fmt.Errorf("product type not found")
 		}
 		queryMods = append(queryMods, qm.Where( "\"productTypeID\" = ?",productType.ProductTypeID),)
 	}
@@ -138,33 +137,19 @@ func GetProductsUtil(c *fiber.Ctx, search, typeName, orderBy string, page, minPr
 		queryMods...
 	).Count(c.Context(),boil.GetContextDB());
 	if err != nil {
-		return nil, 0, "",fmt.Errorf("count products failed: %w", err)
+		return nil, 0,fmt.Errorf("count products failed: %w", err)
 	}
 	totalPage := int(math.Ceil(float64(totalProduct) / float64(PageSize)))
-
-	// Redis cache key
-	redisKey := fmt.Sprintf(
-		"products:page=%d:type=%s:search=%s:minPrice=%d:maxPrice=%d:orderBy=%s",
-		page, typeName, search, minPrice, maxPrice, orderBy,
-	)
-	//Fetch redis cache
-	cachedProducts,err := redisdatabase.Client.Get(redisdatabase.Ctx,redisKey).Result()
-	if err == nil{
-		products := models.ProductSlice{}
-		if json.Unmarshal([]byte(cachedProducts),&products)==nil{
-			return products, totalPage, redisKey,nil
-		}
-	}
 
 	//Pagination logic
 	offset := (page-1)*6;
 	queryMods = append(queryMods,qm.OrderBy("price "+orderBy), qm.Limit(6), qm.Offset(offset));
 	products, err := models.Products(queryMods...).All(c.Context(), boil.GetContextDB());
 	if err != nil {
-		return nil, 0, "",fmt.Errorf("fetch products failed: %w", err)
+		return nil, 0,fmt.Errorf("fetch products failed: %w", err)
 	}
 
-	return products,totalPage,redisKey,nil
+	return products,totalPage,nil
 }
 
 // buildProductDetail fetches product, images, reviews, and star counts from DB.

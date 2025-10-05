@@ -176,9 +176,11 @@ func HandleUpdateAccount(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
-// HandleForgotPassword generates a password reset token and sends email.
-var asynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: "localhost:6379", Password: "", DB: 0})
+//Initialize asynqClient
+var addr = fmt.Sprintf("%s:%s", os.Getenv("REDIS_HOST"), os.Getenv("REDIS_PORT"))
+var asynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: addr, Password: "", DB: 0})
 
+// HandleForgotPassword generates a password reset token and sends email.
 func HandleForgotPassword(c *fiber.Ctx) error {
 	body := dto.ForgotPassStruct{}
 	if err := c.BodyParser(&body); err != nil {
@@ -335,9 +337,11 @@ func HandleContact(c *fiber.Ctx) error {
 	if err != nil {
 		return service.SendError(c, 500, err.Error())
 	}
+	
 	//enqueuing
 	_, err = asynqClient.Enqueue(task)
 	if err != nil {
+		fmt.Println("operating...")
 		return service.SendError(c, 500, err.Error())
 	}
 
