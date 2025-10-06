@@ -185,7 +185,7 @@ func BuildProductDetail(c *fiber.Ctx, id int, filter string, page int) (dto.Prod
 	return response, totalPage, nil
 }
 
-func reviewDisplay(c *fiber.Ctx,id int, filter string, offset int) (reviews []dto.ReviewResponse,error error, totalPage int){
+func reviewDisplay(c *fiber.Ctx,id int, filter string, offset int) (reviews []dto.ReviewResponse,err error, totalPage int){
 	queries := []qm.QueryMod{}
 	queries = append(queries, qm.Where("\"productID\" = ?",id))
 
@@ -200,7 +200,7 @@ func reviewDisplay(c *fiber.Ctx,id int, filter string, offset int) (reviews []dt
 	//calculating total page
 	totalReview, err := models.Reviews(queries...).Count(c.Context(),boil.GetContextDB())
 	if err != nil{
-		return nil,fmt.Errorf(err.Error()),0;
+		return nil,err,0;
 	}
 	totalPage = int(math.Ceil(float64(totalReview)/3));
 
