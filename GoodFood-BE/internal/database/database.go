@@ -43,13 +43,15 @@ var (
 func New() Service {
 	// Reuse Connection
 	if dbInstance != nil {
-        fmt.Println("Reusing DB instance:", dbInstance)
-        fmt.Println("boil context inside New():", boil.GetContextDB())
         return dbInstance
     }
 	//connection string
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require connect_timeout=30 search_path=%s",
-    	host, port, username, password, database, schema)	//connect to db
+	sslMode := "require"
+	if os.Getenv("GO_ENV") == "test"{
+		sslMode = "disable"
+	}
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=30 search_path=%s",
+    	host, port, username, password, database, sslMode, schema)	//connect to db
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
@@ -57,7 +59,6 @@ func New() Service {
 
 	//sqlboiler config
 	boil.SetDB(db)
-	fmt.Println("boil context after SetDB:", boil.GetContextDB())
 
 	dbInstance = &service{
 		db: db,
