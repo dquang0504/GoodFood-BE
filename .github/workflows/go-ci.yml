@@ -61,3 +61,4 @@ jobs:
           GOODFOOD_DB_USERNAME: ${{ vars.GOODFOOD_DB_USERNAME }}
           GOODFOOD_DB_PASSWORD: ${{ vars.GOODFOOD_DB_PASSWORD }}
           GOODFOOD_DB_DATABASE: ${{ vars.GOODFOOD_DB_DATABASE }}
+          GO_ENV: test
