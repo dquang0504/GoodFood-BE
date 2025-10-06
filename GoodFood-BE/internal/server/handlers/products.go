@@ -122,7 +122,7 @@ func ClassifyImage(c *fiber.Ctx) error {
 	_, err = client.R().
 		SetFileReader("file", file.Filename, fileContent).
 		SetResult(&result).
-		Post("http://192.168.1.9:5000/callModel")
+		Post("http://192.168.1.10:5000/callModel")
 	if err != nil {
 		return service.SendError(c, 500, "Python microservice unavailable!")
 	}

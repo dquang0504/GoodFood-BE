@@ -129,7 +129,7 @@ func GetProductsUtil(c *fiber.Ctx, search, typeName, orderBy string, page, minPr
 
 	//search filter logic
 	if search != ""{
-		queryMods = append(queryMods, qm.Where("LOWER(\"productName\") LIKE LOWER(?)","%"+search+"%"))
+		queryMods = append(queryMods, qm.Where("similarity(unaccent(LOWER(\"productName\")), unaccent(LOWER(?))) > 0.3",search))
 	}
 
 	//Calculate totalProduct

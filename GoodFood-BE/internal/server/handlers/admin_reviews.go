@@ -104,7 +104,7 @@ func GetAdminReview(c *fiber.Ctx) error {
 	}
 
 	//Cache response
-	utils.SetCache(redisKey, resp, 10*24*time.Hour, "")
+	utils.SetCache(redisKey, resp, 10*24*time.Hour, redisKey)
 
 	return c.JSON(resp)
 }
@@ -180,7 +180,7 @@ func GetAdminReviewAnalysis(c *fiber.Ctx) error {
 	}
 
 	//Set cache
-	utils.SetCache(redisKey, resp, 10*24*time.Hour, "")
+	utils.SetCache(redisKey, resp, 10*24*time.Hour, redisKey)
 
 	return c.JSON(resp)
 }
@@ -228,7 +228,7 @@ func GetAdminReviewDetail(c *fiber.Ctx) error {
 	}
 
 	//Cache response
-	utils.SetCache(redisKey, response, 10*24*time.Hour, "")
+	utils.SetCache(redisKey, response, 10*24*time.Hour, redisKey)
 
 	return c.JSON(response)
 }

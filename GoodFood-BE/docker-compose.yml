@@ -9,7 +9,7 @@ services:
       GOODFOOD_DB_PORT: 5432
       GOODFOOD_DB_USERNAME: ${GOODFOOD_DB_USERNAME}
       GOODFOOD_DB_PASSWORD: Landautien123.
-      GOODFOOD_DB_DATABASE: goodfood
+      GOODFOOD_DB_DATABASE: GoodFood
       GOODFOOD_DB_SCHEMA: public
       PORT: 8080
       REDIS_HOST: redis
