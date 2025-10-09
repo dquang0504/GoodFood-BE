@@ -4,6 +4,8 @@ services:
     container_name: goodfood-be
     depends_on:
       - psql_bp
+    volumes:
+      - ./secrets/goodfood24h-sa.json:/secrets/key.json:ro
     environment:
       GOODFOOD_DB_HOST: goodfood.chyaq2coo8s2.us-east-2.rds.amazonaws.com
       GOODFOOD_DB_PORT: 5432
@@ -14,6 +16,10 @@ services:
       PORT: 8080
       REDIS_HOST: redis
       REDIS_PORT: ${REDIS_PORT}
+      VERTEX_AI_PROJECT: ${VERTEX_AI_PROJECT}
+      VERTEX_AI_LOCATION: ${VERTEX_AI_LOCATION}
+      VERTEX_AI_MODEL: ${VERTEX_AI_MODEL}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/key.json
     ports:
       - "8080:8080" # expose API port
   

@@ -17,7 +17,7 @@ import (
 func (s *FiberServer) RegisterFiberRoutes(dbService database.Service) {
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:5173, http://localhost:5000",
+		AllowOrigins:     "http://localhost:5173, http://localhost:5000, http://127.0.0.1:5173",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
 		AllowCredentials: true, // credentials require explicit origins
